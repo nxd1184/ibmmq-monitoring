@@ -49,6 +49,7 @@ public class SamplerRegistry {
   private final Duration grace;
   private final Duration listInterval;
   private final List<SampleListener> listeners = new CopyOnWriteArrayList<>();
+  private final List<ConnectionLifecycleListener> lifecycleListeners = new CopyOnWriteArrayList<>();
   private final Map<Long, Entry> entries = new ConcurrentHashMap<>();
   private final Map<Long, Sampler> listSamplers = new ConcurrentHashMap<>();
   private final Set<Long> deletedSinceListRead = new HashSet<>();
@@ -87,6 +88,10 @@ public class SamplerRegistry {
 
   public void addListener(SampleListener l) {
     listeners.add(l);
+  }
+
+  public void addLifecycleListener(ConnectionLifecycleListener l) {
+    lifecycleListeners.add(l);
   }
 
   public Optional<EvaluatedSample> latest(long connectionId) {
@@ -170,6 +175,9 @@ public class SamplerRegistry {
     }
     toRetire.forEach(Sampler::retire);
     toRelease.forEach(Sampler::releaseGateway);
+    if (!fresh.get().prometheusExport()) {
+      notifyRemoved(id);
+    }
   }
 
   public void connectionDeleted(long id) {
@@ -189,6 +197,17 @@ public class SamplerRegistry {
       }
     }
     toRetire.forEach(Sampler::retire);
+    notifyRemoved(id);
+  }
+
+  private void notifyRemoved(long id) {
+    for (ConnectionLifecycleListener l : lifecycleListeners) {
+      try {
+        l.connectionRemoved(id);
+      } catch (RuntimeException ex) {
+        log.warn("Lifecycle listener failed for connection {}: {}", id, ex.toString());
+      }
+    }
   }
 
   @EventListener(ApplicationReadyEvent.class)

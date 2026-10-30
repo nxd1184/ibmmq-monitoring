@@ -284,4 +284,25 @@ class SamplerRegistryTest {
     verify(factory, times(1)).open(any());
     verify(service, times(1)).targetFor(any(MqConnection.class));
   }
+
+  @Test
+  void connectionDeletedNotifiesLifecycleListeners() {
+    var removed = new java.util.ArrayList<Long>();
+    reg.addLifecycleListener(removed::add);
+    connections.remove(1L);
+    reg.connectionDeleted(1);
+    assertThat(removed).containsExactly(1L);
+  }
+
+  @Test
+  void exportTurnedOffNotifiesLifecycleListeners() {
+    var removed = new java.util.ArrayList<Long>();
+    reg.addLifecycleListener(removed::add);
+    exportOn(1);
+    reg.connectionChanged(1);
+    assertThat(removed).isEmpty();
+    connections.put(1L, connection(1, 5, false));
+    reg.connectionChanged(1);
+    assertThat(removed).containsExactly(1L);
+  }
 }

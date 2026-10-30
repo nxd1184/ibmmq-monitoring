@@ -15,6 +15,11 @@ management:
     web:
       exposure:
         include: health,prometheus
+  # Prometheus shows MQ series only; see MetricsConfig for the matching MeterFilter.
+  metrics:
+    enable:
+      all: false
+      ibmmq: true
 
 mqmonitor:
   # Secrets come from the environment. An empty fallback keeps a missing variable a
