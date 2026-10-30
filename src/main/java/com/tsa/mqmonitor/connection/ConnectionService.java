@@ -3,6 +3,7 @@ package com.tsa.mqmonitor.connection;
 import com.tsa.mqmonitor.config.MqMonitorProperties;
 import com.tsa.mqmonitor.crypto.SecretCipher;
 import com.tsa.mqmonitor.health.Thresholds;
+import com.tsa.mqmonitor.mq.BoundedCall;
 import com.tsa.mqmonitor.mq.MqGateway;
 import com.tsa.mqmonitor.mq.MqGatewayException;
 import com.tsa.mqmonitor.mq.MqGatewayFactory;
@@ -191,13 +192,15 @@ public class ConnectionService {
     MqGateway gateway = null;
     try {
       gateway = gatewayFactory.open(targetFor(form));
+      gateway.beginSample();
       var qmgr = gateway.inquireQueueManager();
       return new ConnectionTestResult(true, "Connected to " + qmgr.name(), qmgr);
     } catch (MqGatewayException e) {
       return new ConnectionTestResult(false, e.getMessage(), null);
     } finally {
       if (gateway != null) {
-        gateway.close();
+        MqGateway gw = gateway;
+        BoundedCall.runAsync("closing test connection", gw::close);
       }
     }
   }

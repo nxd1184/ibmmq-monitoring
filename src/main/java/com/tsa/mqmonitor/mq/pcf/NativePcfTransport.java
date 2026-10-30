@@ -33,9 +33,30 @@ public final class NativePcfTransport implements PcfTransport {
     this.agent = agent;
   }
 
+  /**
+   * Connects and opens the PCF agent (MQOPEN of the command queue and the reply model queue) as one
+   * call bounded by the connect timeout: both steps block on the socket when the queue manager is
+   * frozen.
+   */
   public static NativePcfTransport connect(MqTarget target, SSLSocketFactory sslOrNull) {
     Duration timeout = target.connectTimeout();
-    MQQueueManager qmgr = connectQueueManager(target, properties(target, sslOrNull), timeout);
+    Hashtable<String, Object> props = properties(target, sslOrNull);
+    return BoundedConnect.within(
+        timeout,
+        () -> open(target, props, timeout),
+        NativePcfTransport::close,
+        cause -> {
+          if (cause instanceof MqGatewayException e) return e;
+          if (cause instanceof MQException mq) {
+            return PcfErrors.translateConnect(mq.reasonCode, target.queueManager(), mq);
+          }
+          return new MqGatewayException("connect failed: " + cause, cause);
+        });
+  }
+
+  private static NativePcfTransport open(
+      MqTarget target, Hashtable<String, Object> props, Duration timeout) throws MQException {
+    MQQueueManager qmgr = new MQQueueManager(target.queueManager(), props);
     try {
       var agent = new PCFMessageAgent();
       if (!isBlank(target.replyQueueModel())) agent.setModelQueueName(target.replyQueueModel());
@@ -85,20 +106,6 @@ public final class NativePcfTransport implements PcfTransport {
       props.put(MQConstants.SSL_SOCKET_FACTORY_PROPERTY, ssl);
     }
     return props;
-  }
-
-  private static MQQueueManager connectQueueManager(
-      MqTarget target, Hashtable<String, Object> props, Duration timeout) {
-    return BoundedConnect.within(
-        timeout,
-        () -> new MQQueueManager(target.queueManager(), props),
-        NativePcfTransport::disconnectQuietly,
-        cause -> {
-          if (cause instanceof MQException mq) {
-            return PcfErrors.translate(mq.reasonCode, target.queueManager(), mq);
-          }
-          return new MqGatewayException("connect failed: " + cause, cause);
-        });
   }
 
   private static void disconnectQuietly(MQQueueManager q) {

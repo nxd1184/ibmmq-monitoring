@@ -12,7 +12,9 @@ import com.tsa.mqmonitor.mq.MqGatewayException;
 import com.tsa.mqmonitor.mq.MqUnreachableException;
 import com.tsa.mqmonitor.mq.QueueInfo;
 import com.tsa.mqmonitor.mq.QueueManagerInfo;
+import com.tsa.mqmonitor.mq.BoundedCall;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -22,16 +24,45 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * {@link MqGateway} over a {@link PcfTransport}. Every PCF exchange runs on a daemon thread and is
+ * bounded by a per-sample deadline: {@link #beginSample()} starts a budget of {@code timeout} that
+ * all exchanges until the next call share (without a call, each exchange gets the full budget). A
+ * frozen queue manager therefore fails a sample within the timeout instead of hanging the caller
+ * until TCP or the channel heartbeat gives up. On a timeout the gateway is broken: it closes its
+ * transport asynchronously and refuses further exchanges, so the caller opens a new one.
+ */
 public class PcfMqGateway implements MqGateway {
+  /** Used by tests and callers that do not supply the connection's timeout. */
+  static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
+
   private static final String QMGR_OBJECT = "queue manager";
   private static final DateTimeFormatter PUT_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
   private static final DateTimeFormatter PUT_TIME = DateTimeFormatter.ofPattern("HH.mm.ss");
 
   private final PcfTransport transport;
+  private final Duration timeout;
+  private final AtomicBoolean closed = new AtomicBoolean();
+  private volatile boolean broken;
+  private volatile long deadlineNanos;
+  private volatile boolean deadlineSet;
 
   public PcfMqGateway(PcfTransport transport) {
+    this(transport, DEFAULT_TIMEOUT);
+  }
+
+  public PcfMqGateway(PcfTransport transport, Duration timeout) {
     this.transport = transport;
+    this.timeout = timeout == null || timeout.isZero() || timeout.isNegative() ? DEFAULT_TIMEOUT : timeout;
+  }
+
+  @Override
+  public void beginSample() {
+    deadlineNanos = System.nanoTime() + timeout.toNanos();
+    deadlineSet = true;
   }
 
   @Override
@@ -132,9 +163,16 @@ public class PcfMqGateway implements MqGateway {
     return result;
   }
 
+  /** Idempotent. Never called on a thread that must not block: see {@link BoundedCall#runAsync}. */
   @Override
   public void close() {
-    transport.close();
+    if (closed.compareAndSet(false, true)) {
+      transport.close();
+    }
+  }
+
+  boolean isBroken() {
+    return broken;
   }
 
   /**
@@ -143,15 +181,21 @@ public class PcfMqGateway implements MqGateway {
    * error.
    */
   private List<PCFMessage> exchange(PCFMessage request, String objectName, int... emptyReasons) {
+    if (broken || closed.get()) {
+      throw new MqUnreachableException("connection closed after an earlier failure", null);
+    }
     List<PCFMessage> responses;
     try {
-      responses = transport.send(request);
-    } catch (MQException e) {
-      return failed(e.reasonCode, objectName, e, emptyReasons);
-    } catch (MQDataException e) {
-      return failed(e.reasonCode, objectName, e, emptyReasons);
-    } catch (IOException e) {
-      throw new MqUnreachableException("PCF transport failed: " + e.getMessage(), e);
+      responses = boundedSend(request);
+    } catch (Checked c) {
+      if (c.getCause() instanceof MQException e) return failed(e.reasonCode, objectName, e, emptyReasons);
+      if (c.getCause() instanceof MQDataException e) return failed(e.reasonCode, objectName, e, emptyReasons);
+      throw new MqUnreachableException("PCF transport failed: " + c.getCause().getMessage(), c.getCause());
+    } catch (MqUnreachableException e) {
+      if (e.getCause() instanceof TimeoutException) {
+        markBroken();
+      }
+      throw e;
     }
     List<PCFMessage> ok = new ArrayList<>();
     for (PCFMessage m : responses) {
@@ -162,6 +206,50 @@ public class PcfMqGateway implements MqGateway {
       }
     }
     return ok;
+  }
+
+  /** Sends on a daemon thread, waiting at most for what is left of the per-sample deadline. */
+  private List<PCFMessage> boundedSend(PCFMessage request) {
+    Duration budget = timeout;
+    if (deadlineSet) {
+      long remaining = deadlineNanos - System.nanoTime();
+      if (remaining <= 0) {
+        markBroken();
+        throw new MqUnreachableException(timeoutMessage(), new TimeoutException());
+      }
+      budget = Duration.ofNanos(remaining);
+    }
+    return BoundedCall.within(
+            budget,
+            timeoutMessage(),
+            () -> transport.send(request),
+            late -> {},
+            cause -> {
+              if (cause instanceof MQException
+                  || cause instanceof MQDataException
+                  || cause instanceof IOException) {
+                return new Checked((Exception) cause);
+              }
+              if (cause instanceof RuntimeException r) return r;
+              return new MqGatewayException("PCF exchange failed: " + cause, cause);
+            });
+  }
+
+  private String timeoutMessage() {
+    return "no PCF reply within " + BoundedCall.describe(timeout);
+  }
+
+  /** A timed-out exchange may still hold the connection; close it without blocking the caller. */
+  private void markBroken() {
+    broken = true;
+    BoundedCall.runAsync("closing timed-out PCF connection", this::close);
+  }
+
+  /** Carries a checked transport failure out of the bounded call so it can be translated. */
+  private static final class Checked extends RuntimeException {
+    Checked(Exception cause) {
+      super(cause);
+    }
   }
 
   private static List<PCFMessage> failed(int reason, String objectName, Exception e, int[] empty) {

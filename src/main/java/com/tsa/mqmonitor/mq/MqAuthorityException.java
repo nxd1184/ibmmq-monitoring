@@ -4,7 +4,11 @@ public class MqAuthorityException extends MqGatewayException {
   private final String objectName;
 
   public MqAuthorityException(String objectName) {
-    super("authority missing on " + objectName + " (MQRC 2035)");
+    this(objectName, "authority missing on " + objectName + " (MQRC 2035)");
+  }
+
+  public MqAuthorityException(String objectName, String message) {
+    super(message);
     this.objectName = objectName;
   }
 

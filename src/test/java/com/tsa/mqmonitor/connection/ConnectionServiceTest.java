@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -89,7 +90,7 @@ class ConnectionServiceTest extends PostgresTestBase {
     var r = service.test(valid());
     assertThat(r.ok()).isTrue();
     assertThat(r.qmgr().name()).isEqualTo("QM1");
-    verify(gw).close();
+    verify(gw, timeout(2000)).close();
   }
 
   @Test

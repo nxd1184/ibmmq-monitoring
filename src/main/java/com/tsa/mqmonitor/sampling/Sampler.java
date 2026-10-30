@@ -3,6 +3,7 @@ package com.tsa.mqmonitor.sampling;
 import com.tsa.mqmonitor.connection.MqConnection;
 import com.tsa.mqmonitor.health.HealthEvaluator;
 import com.tsa.mqmonitor.health.Thresholds;
+import com.tsa.mqmonitor.mq.BoundedCall;
 import com.tsa.mqmonitor.mq.ChannelInfo;
 import com.tsa.mqmonitor.mq.MqGateway;
 import com.tsa.mqmonitor.mq.MqGatewayFactory;
@@ -17,15 +18,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Samples one connection over a single long-lived gateway. Sampling methods are synchronized so
- * two samples of one connection never run at the same time and a gateway close never races a
- * sample. A suspended or retired sampler never touches MQ: the flags are checked under the same
- * monitor that guards the gateway, so a run that starts after suspend()/retire() cannot reopen a
- * gateway that the registry has released.
+ * Samples one connection over a single long-lived gateway.
+ *
+ * <p>No lock is held across MQ I/O by anything but the sampling path itself: {@code sampleLock}
+ * serializes the samples of this connection (each bounded by the gateway's per-sample deadline),
+ * while {@link #retire()}, {@link #releaseGateway()} and {@link #close()} only swap the gateway
+ * reference and close the old gateway on a daemon thread, so they return at once even while a
+ * sample is blocked on a frozen queue manager. A sample that is running when its sampler is
+ * retired loses its gateway, and its result is discarded rather than published. A suspended or
+ * retired sampler never opens a gateway: a gateway opened concurrently with suspend()/retire() is
+ * closed again as soon as the flag is seen.
  */
 public class Sampler {
   private static final Logger log = LoggerFactory.getLogger(Sampler.class);
@@ -37,8 +45,10 @@ public class Sampler {
   private final HealthEvaluator evaluator;
   private final Clock clock;
   private final List<SampleListener> listeners;
+  private final ReentrantLock sampleLock = new ReentrantLock();
+  /** Guarded by {@code sampleLock}. */
   private final Map<String, Instant> noConsumerSince = new HashMap<>();
-  private MqGateway gateway;
+  private final AtomicReference<MqGateway> gateway = new AtomicReference<>();
   private volatile EvaluatedSample latest;
   private volatile boolean suspended;
   private volatile boolean retired;
@@ -60,39 +70,68 @@ public class Sampler {
     this.listeners = listeners;
   }
 
-  public synchronized EvaluatedSample sampleOnce() {
-    Instant now = clock.instant();
-    if (!active()) {
-      return inactiveResult(now);
-    }
-    Sample sample;
+  public EvaluatedSample sampleOnce() {
+    EvaluatedSample evaluated;
+    sampleLock.lock();
     try {
-      MqGateway gw = gateway();
-      QueueManagerInfo qmgr = gw.inquireQueueManager();
-      List<QueueInfo> queues =
-          gw.inquireQueues(connection.queueFilter(), connection.hideSystemQueues());
-      List<ChannelInfo> channels = gw.inquireChannels();
-      sample = new Sample(connection.id(), now, qmgr, queues, channels, null);
-      trackConsumers(queues, now);
-    } catch (RuntimeException e) {
-      sample = failed(now, e);
+      Instant now = clock.instant();
+      if (!active()) {
+        return inactiveResult(now);
+      }
+      Sample sample;
+      MqGateway gw = null;
+      try {
+        gw = gateway();
+        gw.beginSample();
+        QueueManagerInfo qmgr = gw.inquireQueueManager();
+        List<QueueInfo> queues =
+            gw.inquireQueues(connection.queueFilter(), connection.hideSystemQueues());
+        List<ChannelInfo> channels = gw.inquireChannels();
+        sample = new Sample(connection.id(), now, qmgr, queues, channels, null);
+        trackConsumers(queues, now);
+      } catch (RuntimeException e) {
+        if (!active()) {
+          // stopped while sampling: the failure is ours (gateway closed under it), not MQ's
+          closeIfCurrent(gw);
+          return inactiveResult(now);
+        }
+        sample = failed(now, gw, e);
+      }
+      evaluated = evaluator.evaluate(sample, thresholds, noConsumerSince, now);
+    } finally {
+      sampleLock.unlock();
     }
-    return publish(evaluator.evaluate(sample, thresholds, noConsumerSince, now));
+    return publish(evaluated);
   }
 
-  public synchronized EvaluatedSample sampleQueueManagerOnly() {
-    Instant now = clock.instant();
-    if (!active()) {
-      return inactiveResult(now);
-    }
-    Sample sample;
+  public EvaluatedSample sampleQueueManagerOnly() {
+    EvaluatedSample evaluated;
+    sampleLock.lock();
     try {
-      QueueManagerInfo qmgr = gateway().inquireQueueManager();
-      sample = new Sample(connection.id(), now, qmgr, List.of(), List.of(), null);
-    } catch (RuntimeException e) {
-      sample = failed(now, e);
+      Instant now = clock.instant();
+      if (!active()) {
+        return inactiveResult(now);
+      }
+      Sample sample;
+      MqGateway gw = null;
+      try {
+        gw = gateway();
+        gw.beginSample();
+        QueueManagerInfo qmgr = gw.inquireQueueManager();
+        sample = new Sample(connection.id(), now, qmgr, List.of(), List.of(), null);
+      } catch (RuntimeException e) {
+        if (!active()) {
+          // stopped while sampling: the failure is ours (gateway closed under it), not MQ's
+          closeIfCurrent(gw);
+          return inactiveResult(now);
+        }
+        sample = failed(now, gw, e);
+      }
+      evaluated = evaluator.evaluate(sample, thresholds, Map.of(), now);
+    } finally {
+      sampleLock.unlock();
     }
-    return publish(evaluator.evaluate(sample, thresholds, Map.of(), now));
+    return publish(evaluated);
   }
 
   public Optional<EvaluatedSample> latest() {
@@ -104,12 +143,13 @@ public class Sampler {
     retire();
   }
 
-  /** Permanent: used when the registry discards this sampler (rebuild, delete, shutdown). */
+  /**
+   * Permanent: used when the registry discards this sampler (rebuild, delete, shutdown). Returns
+   * at once; the gateway is closed on a daemon thread, which also unblocks a running sample.
+   */
   public void retire() {
     retired = true;
-    synchronized (this) {
-      closeGateway();
-    }
+    closeGateway(gateway.getAndSet(null));
   }
 
   /** Blocks MQ access until resume(). Cheap and lock-free, so the registry can call it under its lock. */
@@ -122,9 +162,9 @@ public class Sampler {
   }
 
   /** Closes the gateway if the sampler is still suspended or retired; a resumed sampler keeps it. */
-  public synchronized void releaseGateway() {
+  public void releaseGateway() {
     if (!active()) {
-      closeGateway();
+      closeGateway(gateway.getAndSet(null));
     }
   }
 
@@ -144,30 +184,44 @@ public class Sampler {
             Sample.failed(connection.id(), now, "sampler stopped"), thresholds, Map.of(), now);
   }
 
-  private void closeGateway() {
-    if (gateway != null) {
-      MqGateway gw = gateway;
-      gateway = null;
-      try {
-        gw.close();
-      } catch (RuntimeException e) {
-        log.debug("Closing gateway for connection {} failed: {}", connection.id(), e.toString());
-      }
+  /** Closes without blocking the caller: a close on a dead connection can hang on its socket. */
+  private void closeGateway(MqGateway gw) {
+    if (gw != null) {
+      long id = connection.id();
+      BoundedCall.runAsync("closing gateway for connection " + id, gw::close);
     }
   }
 
   private MqGateway gateway() {
-    if (gateway == null) {
-      gateway = factory.open(target);
+    MqGateway gw = gateway.get();
+    if (gw != null) {
+      return gw;
     }
-    return gateway;
+    gw = factory.open(target);
+    if (!gateway.compareAndSet(null, gw)) {
+      closeGateway(gw); // cannot happen while samples are serialized; never leak a connection
+      throw new IllegalStateException("gateway replaced concurrently");
+    }
+    if (!active()) {
+      // retire()/suspend() raced the open: whichever ran second sees the other and closes it.
+      closeGateway(gateway.getAndSet(null));
+      throw new IllegalStateException("sampler stopped");
+    }
+    return gw;
   }
 
-  private Sample failed(Instant now, RuntimeException e) {
+  private Sample failed(Instant now, MqGateway gw, RuntimeException e) {
     String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     log.debug("Sample of connection {} failed: {}", connection.id(), message);
-    closeGateway();
+    closeIfCurrent(gw);
     return Sample.failed(connection.id(), now, message);
+  }
+
+  /** Drops a failed gateway so the next sample reconnects; leaves a newer gateway alone. */
+  private void closeIfCurrent(MqGateway gw) {
+    if (gw != null && gateway.compareAndSet(gw, null)) {
+      closeGateway(gw);
+    }
   }
 
   private void trackConsumers(List<QueueInfo> queues, Instant now) {
@@ -183,7 +237,11 @@ public class Sampler {
     noConsumerSince.keySet().retainAll(present);
   }
 
+  /** Runs outside every lock. A retired sampler publishes nothing, not even a late result. */
   private EvaluatedSample publish(EvaluatedSample evaluated) {
+    if (retired) {
+      return evaluated;
+    }
     latest = evaluated;
     for (SampleListener listener : listeners) {
       try {

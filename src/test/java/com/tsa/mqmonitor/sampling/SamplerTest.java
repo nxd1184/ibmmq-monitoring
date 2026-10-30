@@ -5,7 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,8 +23,17 @@ import com.tsa.mqmonitor.mq.MqTarget;
 import com.tsa.mqmonitor.mq.MqUnreachableException;
 import com.tsa.mqmonitor.mq.QueueInfo;
 import com.tsa.mqmonitor.mq.QueueManagerInfo;
+import com.ibm.mq.headers.pcf.PCFMessage;
+import com.tsa.mqmonitor.mq.pcf.PcfMqGateway;
+import com.tsa.mqmonitor.mq.pcf.PcfTransport;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -80,7 +91,7 @@ class SamplerTest {
     assertThat(sampler.sampleOnce().sample().error()).isEqualTo("MQRC 2009 connection broken");
     sampler.sampleOnce();
     verify(factory, times(2)).open(any());
-    verify(gw).close();
+    verify(gw, timeout(2000)).close();
   }
 
   @Test
@@ -140,6 +151,95 @@ class SamplerTest {
     sampler.sampleOnce();
     sampler.sampleQueueManagerOnly();
     verify(factory, times(1)).open(any());
-    verify(gw).close();
+    verify(gw, timeout(2000)).close();
+  }
+
+  /** A transport whose send never returns, like a PCF exchange with a frozen queue manager. */
+  static final class BlockingTransport implements PcfTransport {
+    final CountDownLatch sending = new CountDownLatch(1);
+    final CountDownLatch closed = new CountDownLatch(1);
+
+    @Override
+    public List<PCFMessage> send(PCFMessage request) {
+      sending.countDown();
+      while (true) {
+        try {
+          new CountDownLatch(1).await(); // ignores interrupts, as a blocked socket read does
+        } catch (InterruptedException e) {
+          // keep blocking
+        }
+      }
+    }
+
+    @Override
+    public void close() {
+      closed.countDown();
+    }
+  }
+
+  @Test
+  void frozenQueueManagerFailsTheSampleWithinTheBoundAndReconnectsNextTime() throws Exception {
+    var frozen = new BlockingTransport();
+    when(factory.open(any()))
+        .thenReturn(new PcfMqGateway(frozen, Duration.ofMillis(300)))
+        .thenReturn(gw);
+    long start = System.nanoTime();
+    EvaluatedSample failed = sampler.sampleOnce();
+    long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+
+    assertThat(failed.sample().reachable()).isFalse();
+    assertThat(failed.sample().error()).isEqualTo("no PCF reply within 300ms");
+    assertThat(elapsedMs).isLessThan(2_000);
+    assertThat(frozen.closed.await(2, TimeUnit.SECONDS)).as("broken gateway closed").isTrue();
+
+    EvaluatedSample next = sampler.sampleOnce();
+    assertThat(next.sample().reachable()).isTrue();
+    verify(factory, times(2)).open(any());
+  }
+
+  @Test
+  void retireWhileASampleIsBlockedReturnsPromptly() throws Exception {
+    var frozen = new BlockingTransport();
+    when(factory.open(any())).thenReturn(new PcfMqGateway(frozen, Duration.ofSeconds(30)));
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try {
+      Future<EvaluatedSample> running = pool.submit(sampler::sampleOnce);
+      assertThat(frozen.sending.await(2, TimeUnit.SECONDS)).isTrue();
+
+      long start = System.nanoTime();
+      sampler.retire();
+      sampler.releaseGateway();
+      sampler.close();
+      assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)).isLessThan(500);
+      assertThat(frozen.closed.await(2, TimeUnit.SECONDS)).as("gateway closed").isTrue();
+      assertThat(running.isDone()).isFalse(); // still stuck in the frozen send
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  void retiredSamplerPublishesNothing() throws Exception {
+    var inQmgr = new CountDownLatch(1);
+    var proceed = new CountDownLatch(1);
+    when(gw.inquireQueueManager())
+        .thenAnswer(
+            inv -> {
+              inQmgr.countDown();
+              proceed.await(2, TimeUnit.SECONDS);
+              return qm;
+            });
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try {
+      Future<EvaluatedSample> running = pool.submit(sampler::sampleOnce);
+      assertThat(inQmgr.await(2, TimeUnit.SECONDS)).isTrue();
+      sampler.retire();
+      proceed.countDown();
+      running.get(2, TimeUnit.SECONDS);
+    } finally {
+      pool.shutdownNow();
+    }
+    verify(listener, never()).onSample(any());
+    assertThat(sampler.latest()).isEmpty();
   }
 }

@@ -9,6 +9,7 @@ import com.ibm.mq.headers.pcf.PCFException;
 import com.ibm.mq.headers.pcf.PCFMessage;
 import com.ibm.mq.jakarta.jms.MQConnectionFactory;
 import com.ibm.msg.client.jakarta.wmq.WMQConstants;
+import com.tsa.mqmonitor.mq.MqAuthorityException;
 import com.tsa.mqmonitor.mq.MqGatewayException;
 import com.tsa.mqmonitor.mq.MqTarget;
 import com.tsa.mqmonitor.mq.MqUnreachableException;
@@ -26,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.net.ssl.SSLSocketFactory;
 import org.springframework.jms.support.JmsUtils;
 
@@ -53,7 +55,8 @@ public final class JmsPcfTransport implements PcfTransport {
   private final MessageConsumer consumer;
   private final long timeoutMillis;
   private final String queueManager;
-  private boolean closed;
+  /** Volatile and lock-free so {@link #close()} can run while a send is blocked. */
+  private final AtomicBoolean closed = new AtomicBoolean();
 
   private JmsPcfTransport(
       Connection connection,
@@ -72,6 +75,11 @@ public final class JmsPcfTransport implements PcfTransport {
     this.queueManager = queueManager;
   }
 
+  /**
+   * Connects and creates the session, temporary reply queue, producer and consumer as one call
+   * bounded by the connect timeout: every step is a round trip that blocks on a frozen queue
+   * manager.
+   */
   public static JmsPcfTransport connect(MqTarget target, SSLSocketFactory sslOrNull) {
     MQConnectionFactory factory;
     try {
@@ -79,12 +87,20 @@ public final class JmsPcfTransport implements PcfTransport {
     } catch (JMSException e) {
       throw translate(e, target.queueManager());
     }
-    Connection connection =
-        BoundedConnect.within(
-            target.connectTimeout(),
-            factory::createConnection,
-            JmsUtils::closeConnection,
-            cause -> translate(cause, target.queueManager()));
+    return BoundedConnect.within(
+        target.connectTimeout(),
+        () -> open(factory, target),
+        JmsPcfTransport::close,
+        cause -> cause instanceof MqGatewayException e ? e : translate(cause, target.queueManager()));
+  }
+
+  private static JmsPcfTransport open(MQConnectionFactory factory, MqTarget target) {
+    Connection connection;
+    try {
+      connection = factory.createConnection();
+    } catch (JMSException e) {
+      throw translateConnect(e, target.queueManager());
+    }
     Session session = null;
     TemporaryQueue replyQueue = null;
     MessageProducer producer = null;
@@ -114,6 +130,15 @@ public final class JmsPcfTransport implements PcfTransport {
     }
   }
 
+  /** As {@link #translate}, with the connect-time wording for MQRC 2035. */
+  static MqGatewayException translateConnect(Throwable failure, String queueManager) {
+    MqGatewayException e = translate(failure, queueManager);
+    if (e instanceof MqAuthorityException) {
+      return PcfErrors.translateConnect(CMQC.MQRC_NOT_AUTHORIZED, queueManager, failure);
+    }
+    return e;
+  }
+
   /**
    * Sends one PCF request and returns every response message up to and including the last one.
    * Failed responses raise a {@link PCFException} exactly as {@link
@@ -122,7 +147,7 @@ public final class JmsPcfTransport implements PcfTransport {
    */
   @Override
   public synchronized List<PCFMessage> send(PCFMessage request) throws PCFException {
-    if (closed) throw new IllegalStateException("transport is closed");
+    if (closed.get()) throw new MqUnreachableException("PCF transport is closed", null);
     try {
       BytesMessage message = session.createBytesMessage();
       message.writeBytes(PcfCodec.encode(request));
@@ -158,11 +183,17 @@ public final class JmsPcfTransport implements PcfTransport {
     }
   }
 
+  /**
+   * Not synchronized with {@link #send}: closing the connection from another thread is allowed by
+   * JMS and makes a blocked {@code receive} return, which is how a timed-out exchange is released.
+   * Closing the connection also closes its session, producer and consumer and deletes the
+   * temporary queue.
+   */
   @Override
-  public synchronized void close() {
-    if (closed) return;
-    closed = true;
-    release(connection, session, replyQueue, producer, consumer);
+  public void close() {
+    if (closed.compareAndSet(false, true)) {
+      JmsUtils.closeConnection(connection);
+    }
   }
 
   /**

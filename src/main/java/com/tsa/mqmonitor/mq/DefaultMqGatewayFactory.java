@@ -20,8 +20,12 @@ public class DefaultMqGatewayFactory implements MqGatewayFactory {
   public MqGateway open(MqTarget target) {
     MqTarget t = target.connectTimeout() != null ? target : withDefaultTimeout(target);
     return switch (t.clientType()) {
-      case NATIVE -> new PcfMqGateway(NativePcfTransport.connect(t, SslContextFactory.build(t.tls())));
-      case SPRING_JMS -> new PcfMqGateway(JmsPcfTransport.connect(t, SslContextFactory.build(t.tls())));
+      case NATIVE ->
+          new PcfMqGateway(
+              NativePcfTransport.connect(t, SslContextFactory.build(t.tls())), t.connectTimeout());
+      case SPRING_JMS ->
+          new PcfMqGateway(
+              JmsPcfTransport.connect(t, SslContextFactory.build(t.tls())), t.connectTimeout());
     };
   }
 

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -218,7 +219,7 @@ class SamplerRegistryTest {
     scheduler.advance(Duration.ofSeconds(1));
     reg.unwatch(1, w);
     scheduler.advance(Duration.ofSeconds(30));
-    verify(gw).close();
+    verify(gw, timeout(2000)).close();
     assertThat(reg.latest(1)).isPresent();
   }
 
@@ -228,7 +229,7 @@ class SamplerRegistryTest {
     scheduler.advance(Duration.ofSeconds(1));
     reg.unwatch(1, w);
     scheduler.advance(Duration.ofSeconds(30));
-    verify(gw, times(1)).close();
+    verify(gw, timeout(2000).times(1)).close();
     reg.watch(1);
     scheduler.advance(Duration.ofSeconds(11));
     verify(factory, times(2)).open(any());
@@ -244,7 +245,7 @@ class SamplerRegistryTest {
     scheduler.advance(Duration.ofSeconds(30));
     lateRun.run();
     verify(factory, times(1)).open(any());
-    verify(gw, times(1)).close();
+    verify(gw, timeout(2000).times(1)).close();
   }
 
   @Test
@@ -264,7 +265,7 @@ class SamplerRegistryTest {
     verify(factory, times(1)).open(any());
     assertThat(reg.latest(2)).isEmpty();
     reg.unwatchList("w");
-    verify(gw, times(1)).close();
+    verify(gw, timeout(2000).times(1)).close();
   }
 
   @Test
@@ -305,4 +306,5 @@ class SamplerRegistryTest {
     reg.connectionChanged(1);
     assertThat(removed).containsExactly(1L);
   }
+
 }

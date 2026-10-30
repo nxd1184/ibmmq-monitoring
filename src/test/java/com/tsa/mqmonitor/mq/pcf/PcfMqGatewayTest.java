@@ -240,4 +240,68 @@ class PcfMqGatewayTest {
     gw.close();
     assertThat(t.closed).isTrue();
   }
+
+  /** Answers every request with an empty OK reply after {@code delayMs}. */
+  static final class SlowTransport implements PcfTransport {
+    final long delayMs;
+    volatile boolean closed;
+
+    SlowTransport(long delayMs) {
+      this.delayMs = delayMs;
+    }
+
+    @Override
+    public java.util.List<PCFMessage> send(PCFMessage request) {
+      try {
+        Thread.sleep(delayMs);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      return java.util.List.of();
+    }
+
+    @Override
+    public void close() {
+      closed = true;
+    }
+  }
+
+  @Test
+  void oneDeadlineIsSharedByEveryExchangeOfASample() throws Exception {
+    var slow = new SlowTransport(150);
+    var bounded = new PcfMqGateway(slow, java.time.Duration.ofMillis(400));
+    bounded.beginSample();
+    bounded.inquireQueueManager(); // two exchanges, ~300ms
+    long start = System.nanoTime();
+    assertThatThrownBy(() -> bounded.inquireQueues("*", true)) // would need ~300ms more
+        .isInstanceOf(MqUnreachableException.class)
+        .hasMessage("no PCF reply within 400ms");
+    assertThat(java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start))
+        .isLessThan(1_000);
+    assertThat(bounded.isBroken()).isTrue();
+    long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
+    while (!slow.closed && System.nanoTime() < deadline) Thread.sleep(10);
+    assertThat(slow.closed).as("closed asynchronously").isTrue();
+    assertThatThrownBy(bounded::inquireChannels).isInstanceOf(MqUnreachableException.class);
+  }
+
+  @Test
+  void newSampleGetsAFreshBudget() {
+    var slow = new SlowTransport(150);
+    var bounded = new PcfMqGateway(slow, java.time.Duration.ofMillis(400));
+    bounded.beginSample();
+    bounded.inquireQueueManager();
+    bounded.beginSample();
+    bounded.inquireQueueManager();
+    assertThat(bounded.isBroken()).isFalse();
+  }
+
+  @Test
+  void connectTimeAuthorityFailureNamesCredentials() {
+    assertThat(PcfErrors.translateConnect(CMQC.MQRC_NOT_AUTHORIZED, "QM1", null))
+        .isInstanceOf(MqAuthorityException.class)
+        .hasMessage("not authorized: check username/password or +connect authority (MQRC 2035)");
+    assertThat(PcfErrors.translate(CMQC.MQRC_NOT_AUTHORIZED, "DEV.*", null))
+        .hasMessage("authority missing on DEV.* (MQRC 2035)");
+  }
 }
