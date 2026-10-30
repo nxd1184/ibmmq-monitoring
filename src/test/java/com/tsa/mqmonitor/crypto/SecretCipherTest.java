@@ -29,9 +29,21 @@ class SecretCipherTest {
 
     @Test
     void tamperedTokenFails() {
-        var t = cipher.encrypt("x").toCharArray();
-        t[t.length - 2] ^= 1;
-        assertThatThrownBy(() -> cipher.decrypt(new String(t))).isInstanceOf(IllegalArgumentException.class);
+        byte[] raw = Base64.getDecoder().decode(cipher.encrypt("x"));
+        raw[raw.length - 1] ^= 1;
+        String tampered = Base64.getEncoder().encodeToString(raw);
+        assertThatThrownBy(() -> cipher.decrypt(tampered)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void nonBase64TokenFails() {
+        assertThatThrownBy(() -> cipher.decrypt("not base64!")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void shortTokenFails() {
+        String shortToken = Base64.getEncoder().encodeToString(new byte[12 + 16 - 1]);
+        assertThatThrownBy(() -> cipher.decrypt(shortToken)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -39,5 +51,12 @@ class SecretCipherTest {
         assertThatThrownBy(() -> SecretCipher.fromBase64(Base64.getEncoder().encodeToString(new byte[16])))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("32 bytes");
+    }
+
+    @Test
+    void constructorRejectsWrongKeyLength() {
+        assertThatThrownBy(() -> new SecretCipher(new byte[16]))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("MQMONITOR_ENCRYPTION_KEY must be base64 of 32 bytes");
     }
 }

@@ -29,17 +29,19 @@ public final class SecretCipher {
 
     public SecretCipher(byte[] key32) {
         if (key32.length != KEY_BYTES) {
-            throw new IllegalArgumentException(KEY_MESSAGE);
+            throw new IllegalStateException(KEY_MESSAGE);
         }
         this.key = new SecretKeySpec(key32, "AES");
     }
 
     public static SecretCipher fromBase64(String key) {
+        byte[] decoded;
         try {
-            return new SecretCipher(Base64.getDecoder().decode(key));
+            decoded = Base64.getDecoder().decode(key);
         } catch (IllegalArgumentException e) {
             throw new IllegalStateException(KEY_MESSAGE, e);
         }
+        return new SecretCipher(decoded);
     }
 
     public String encrypt(String plain) {
