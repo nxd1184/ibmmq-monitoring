@@ -49,7 +49,7 @@ UI: list, create, edit, delete with confirmation, and **Test connection** from t
 ## Health
 
 Health is `HEALTHY` or `UNHEALTHY` with a reason. Computed per Sample.
-- Queue: Depth above absolute Threshold, or Depth above percent-of-max Threshold (default 80), or Open Input Count 0 for longer than the no-consumer Threshold (default 60 seconds), or oldest message age above Threshold (default unset).
+- Queue: Depth at or above absolute Threshold, or Depth at or above percent-of-max Threshold (default 80), or Open Input Count 0 for longer than the no-consumer Threshold (default 60 seconds), or oldest message age above Threshold (default unset).
 - Channel: Status not `RUNNING`.
 - Connection: queue manager unreachable, or any Queue or Channel unhealthy.
 Thresholds have global defaults in configuration and per-Connection overrides.
