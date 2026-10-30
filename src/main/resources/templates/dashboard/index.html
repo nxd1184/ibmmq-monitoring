@@ -17,6 +17,8 @@
        th:text="${showSystem} ? 'Hide system queues' : 'Show system queues'">Show system queues</a>
   </div>
   <div class="dashboard-stream" hx-ext="sse"
+       hx-on::sse-error="this.classList.add('sse-down')"
+       hx-on::sse-open="this.classList.remove('sse-down')"
        th:sse-connect="${showSystem}
            ? @{/connections/{id}/stream(id=${connection.id},showSystem=true)}
            : @{/connections/{id}/stream(id=${connection.id})}">

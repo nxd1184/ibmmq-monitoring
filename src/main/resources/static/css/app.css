@@ -674,3 +674,27 @@ ul.error {
 
 .live-failed { color: var(--status-unhealthy-fg); }
 .live-failed .dot { color: var(--status-unhealthy-fg); }
+
+/* ---------- Live feed disconnected (class toggled by hx-on::sse-error / sse-open) ---------- */
+
+.dashboard-stream.sse-down::before,
+.table-card.sse-down::before {
+  content: "Live updates disconnected. Reconnecting\2026";
+  display: block;
+  padding: var(--space-3) var(--space-4) var(--space-3) 36px;
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 20px 50%, var(--status-unhealthy-fg) 0 4px, transparent 4.5px),
+    var(--status-unhealthy-bg);
+  color: var(--status-unhealthy-fg);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.table-card.sse-down::before { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+
+.sse-down .live,
+.sse-down .live .dot { color: var(--status-unknown-fg); }
+
+.sse-down .live-word { display: none; }
+.sse-down .live-label::before { content: "Stale"; }

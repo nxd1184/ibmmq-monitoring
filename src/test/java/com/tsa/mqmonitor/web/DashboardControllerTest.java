@@ -67,6 +67,16 @@ class DashboardControllerTest extends PostgresTestBase {
   }
 
   @Test
+  void streamContainerTracksFeedDisconnects() throws Exception {
+    mvc.perform(get("/connections/" + id).with(user("admin")))
+        .andExpect(status().isOk())
+        .andExpect(
+            content()
+                .string(containsString("hx-on::sse-error=\"this.classList.add('sse-down')\"")))
+        .andExpect(content().string(containsString("hx-on::sse-open=")));
+  }
+
+  @Test
   void showSystemFlagFlowsToStreamAndToggle() throws Exception {
     mvc.perform(get("/connections/" + id).param("showSystem", "true").with(user("admin")))
         .andExpect(status().isOk())
