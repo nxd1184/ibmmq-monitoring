@@ -1,6 +1,7 @@
 package com.tsa.mqmonitor.mq;
 
 import com.tsa.mqmonitor.config.MqMonitorProperties;
+import com.tsa.mqmonitor.mq.pcf.JmsPcfTransport;
 import com.tsa.mqmonitor.mq.pcf.NativePcfTransport;
 import com.tsa.mqmonitor.mq.pcf.PcfMqGateway;
 import com.tsa.mqmonitor.mq.tls.SslContextFactory;
@@ -20,7 +21,7 @@ public class DefaultMqGatewayFactory implements MqGatewayFactory {
     MqTarget t = target.connectTimeout() != null ? target : withDefaultTimeout(target);
     return switch (t.clientType()) {
       case NATIVE -> new PcfMqGateway(NativePcfTransport.connect(t, SslContextFactory.build(t.tls())));
-      case SPRING_JMS -> throw new UnsupportedOperationException("SPRING_JMS transport arrives in Task 7");
+      case SPRING_JMS -> new PcfMqGateway(JmsPcfTransport.connect(t, SslContextFactory.build(t.tls())));
     };
   }
 

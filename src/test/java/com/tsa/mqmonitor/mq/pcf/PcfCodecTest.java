@@ -2,6 +2,7 @@ package com.tsa.mqmonitor.mq.pcf;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ibm.mq.MQMessage;
 import com.ibm.mq.constants.CMQC;
 import com.ibm.mq.constants.CMQCFC;
 import com.ibm.mq.headers.pcf.PCFMessage;
@@ -25,5 +26,21 @@ class PcfCodecTest {
     var more = new PCFMessage(CMQCFC.MQCFT_RESPONSE, CMQCFC.MQCMD_INQUIRE_Q, 1, false);
     assertThat(PcfCodec.isLast(PcfCodec.decode(PcfCodec.encode(last)))).isTrue();
     assertThat(PcfCodec.isLast(PcfCodec.decode(PcfCodec.encode(more)))).isFalse();
+  }
+
+  @Test
+  void decodesLittleEndianReplyWithItsEncoding() throws Exception {
+    var reply = new PCFMessage(CMQCFC.MQCFT_RESPONSE, CMQCFC.MQCMD_INQUIRE_Q, 1, true);
+    reply.addParameter(CMQC.MQIA_CURRENT_Q_DEPTH, 3);
+    var m = new MQMessage();
+    m.encoding = CMQC.MQENC_INTEGER_REVERSED | CMQC.MQENC_DECIMAL_NORMAL | CMQC.MQENC_FLOAT_IEEE_REVERSED; // 546
+    reply.write(m);
+    byte[] bytes = new byte[m.getMessageLength()];
+    m.seek(0);
+    m.readFully(bytes);
+
+    var back = PcfCodec.decode(bytes, 546);
+    assertThat(PcfCodec.isLast(back)).isTrue();
+    assertThat(back.getIntParameterValue(CMQC.MQIA_CURRENT_Q_DEPTH)).isEqualTo(3);
   }
 }

@@ -7,21 +7,14 @@ import com.ibm.mq.constants.MQConstants;
 import com.ibm.mq.headers.MQDataException;
 import com.ibm.mq.headers.pcf.PCFMessage;
 import com.ibm.mq.headers.pcf.PCFMessageAgent;
-import com.ibm.mq.jmqi.CipherSuiteUtils;
 import com.tsa.mqmonitor.mq.MqGatewayException;
 import com.tsa.mqmonitor.mq.MqTarget;
-import com.tsa.mqmonitor.mq.MqUnreachableException;
+import com.tsa.mqmonitor.mq.tls.CipherSuites;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
@@ -31,15 +24,6 @@ import javax.net.ssl.SSLSocketFactory;
  */
 public final class NativePcfTransport implements PcfTransport {
   static final String APP_NAME = "mq-monitor";
-
-  /** A connect that hangs (e.g. a blackholed host) keeps its daemon thread until the OS gives up. */
-  private static final ExecutorService CONNECTOR =
-      Executors.newCachedThreadPool(
-          r -> {
-            Thread t = new Thread(r, "mq-connect");
-            t.setDaemon(true);
-            return t;
-          });
 
   private final MQQueueManager qmgr;
   private final PCFMessageAgent agent;
@@ -97,53 +81,24 @@ public final class NativePcfTransport implements PcfTransport {
       props.put(MQConstants.USE_MQCSP_AUTHENTICATION_PROPERTY, true);
     }
     if (ssl != null) {
-      props.put(MQConstants.SSL_CIPHER_SUITE_PROPERTY, cipherSuite(target.tls().cipherSpec()));
+      props.put(MQConstants.SSL_CIPHER_SUITE_PROPERTY, CipherSuites.forCipherSpec(target.tls().cipherSpec()));
       props.put(MQConstants.SSL_SOCKET_FACTORY_PROPERTY, ssl);
     }
     return props;
   }
 
-  /**
-   * The MQ classes for Java take a CipherSuite, not the CipherSpec an MQ admin configures (for
-   * example {@code ANY_TLS12_OR_HIGHER} becomes {@code *TLS12ORHIGHER}). A value that is not a
-   * known CipherSpec is passed through as a CipherSuite name.
-   */
-  static String cipherSuite(String cipherSpec) {
-    String suite = CipherSuiteUtils.toCipherSuite(cipherSpec);
-    return suite != null ? suite : cipherSpec;
-  }
-
   private static MQQueueManager connectQueueManager(
       MqTarget target, Hashtable<String, Object> props, Duration timeout) {
-    var result = new CompletableFuture<MQQueueManager>();
-    CONNECTOR.execute(
-        () -> {
-          try {
-            MQQueueManager q = new MQQueueManager(target.queueManager(), props);
-            // The caller gave up already: release the connection nobody will close.
-            if (!result.complete(q)) disconnectQuietly(q);
-          } catch (Throwable t) {
-            result.completeExceptionally(t);
+    return BoundedConnect.within(
+        timeout,
+        () -> new MQQueueManager(target.queueManager(), props),
+        NativePcfTransport::disconnectQuietly,
+        cause -> {
+          if (cause instanceof MQException mq) {
+            return PcfErrors.translate(mq.reasonCode, target.queueManager(), mq);
           }
+          return new MqGatewayException("connect failed: " + cause, cause);
         });
-    try {
-      return result.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-    } catch (TimeoutException e) {
-      if (result.cancel(true)) {
-        throw new MqUnreachableException(
-            "connect timed out after " + timeout.toSeconds() + "s", e);
-      }
-      return result.join(); // completed in the race with the timeout
-    } catch (ExecutionException e) {
-      if (e.getCause() instanceof MQException mq) {
-        throw PcfErrors.translate(mq.reasonCode, target.queueManager(), mq);
-      }
-      throw new MqGatewayException("connect failed: " + e.getCause(), e.getCause());
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      result.cancel(true);
-      throw new MqUnreachableException("connect interrupted", e);
-    }
   }
 
   private static void disconnectQuietly(MQQueueManager q) {

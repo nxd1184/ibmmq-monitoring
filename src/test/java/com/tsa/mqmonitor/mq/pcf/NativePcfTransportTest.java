@@ -18,15 +18,6 @@ class NativePcfTransportTest {
   }
 
   @Test
-  void cipherSpecIsTranslatedToCipherSuite() {
-    assertThat(NativePcfTransport.cipherSuite("ANY_TLS12_OR_HIGHER")).isEqualTo("*TLS12ORHIGHER");
-    assertThat(NativePcfTransport.cipherSuite("ECDHE_RSA_AES_128_GCM_SHA256"))
-        .isEqualTo("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256");
-    assertThat(NativePcfTransport.cipherSuite("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
-        .isEqualTo("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256");
-  }
-
-  @Test
   void credentialsOnlyWhenUsernameGiven() {
     var props = NativePcfTransport.properties(target(null, TlsSettings.none()), null);
     assertThat(props).doesNotContainKeys(
