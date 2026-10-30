@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: ibmmq-monitoring-tool
+  flyway:
+    enabled: true
+
+# The MQ starter would otherwise build a connection factory from ibm.mq.* properties;
+# this tool builds one per stored connection instead.
+ibm:
+  mq:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
+mqmonitor:
+  # Secrets come from the environment. An empty fallback keeps a missing variable a
+  # bind-validation failure (clear message) instead of a placeholder resolution error.
+  admin:
+    username: ${MQMONITOR_ADMIN_USERNAME:}
+    password: ${MQMONITOR_ADMIN_PASSWORD:}
+  encryption-key: ${MQMONITOR_ENCRYPTION_KEY:}
+  sampling:
+    watcher-grace-seconds: 30
+    list-interval-seconds: 30
+  thresholds:
+    depth-percent: 80
+    no-consumer-seconds: 60
+  mq:
+    connect-timeout-seconds: 10

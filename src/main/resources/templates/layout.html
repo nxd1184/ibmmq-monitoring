@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="layout(title, content)">
+<head>
+  <meta charset="UTF-8">
+  <title th:text="${title}">IBM MQ Monitor</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <script th:src="@{/webjars/htmx.org/dist/htmx.min.js}"></script>
+  <script th:src="@{/webjars/htmx-ext-sse/dist/sse.js}"></script>
+</head>
+<body hx-ext="sse">
+  <nav>
+    <a th:href="@{/connections}">Connections</a>
+    <form th:action="@{/logout}" method="post">
+      <button type="submit">Log out</button>
+    </form>
+  </nav>
+  <main th:replace="${content}">content</main>
+</body>
+</html>

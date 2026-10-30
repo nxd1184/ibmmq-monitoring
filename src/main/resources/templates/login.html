@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Sign in</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+  <main class="login">
+    <h1>IBM MQ Monitor</h1>
+    <p th:if="${param.error}" class="error">Invalid username or password.</p>
+    <p th:if="${param.logout}">You have been signed out.</p>
+    <form th:action="@{/login}" method="post">
+      <label>Username <input type="text" name="username" autofocus required></label>
+      <label>Password <input type="password" name="password" required></label>
+      <button type="submit">Sign in</button>
+    </form>
+  </main>
+</body>
+</html>

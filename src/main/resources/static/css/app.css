@@ -1,0 +1,6 @@
+body { font-family: system-ui, sans-serif; margin: 0; }
+nav { display: flex; gap: 1rem; align-items: center; padding: .5rem 1rem; border-bottom: 1px solid #ccc; }
+main { padding: 1rem; }
+.login { max-width: 20rem; margin: 4rem auto; }
+.login label { display: block; margin-bottom: .75rem; }
+.error { color: #b00020; }
