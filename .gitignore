@@ -1,0 +1,6 @@
+target/
+.superpowers/
+*.log
+.idea/
+*.iml
+.DS_Store
