@@ -13,4 +13,14 @@ public record MqTarget(
     ClientType clientType,
     TlsSettings tls,
     String replyQueueModel,
-    Duration connectTimeout) {}
+    Duration connectTimeout) {
+
+  /** Never prints the password. */
+  @Override
+  public String toString() {
+    return "MqTarget[host=" + host + ", port=" + port + ", queueManager=" + queueManager
+        + ", channel=" + channel + ", username=" + username + ", password=" + Redact.secret(password)
+        + ", clientType=" + clientType + ", tls=" + tls + ", replyQueueModel=" + replyQueueModel
+        + ", connectTimeout=" + connectTimeout + "]";
+  }
+}

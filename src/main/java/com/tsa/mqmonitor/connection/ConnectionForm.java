@@ -4,24 +4,31 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
+/** Size limits match the columns in {@code V1__connections.sql} (and MQ's own name limits). */
 public class ConnectionForm {
   private Long id;
   @NotBlank
+  @Size(max = 100)
   private String name;
 
   @NotBlank
+  @Size(max = 255)
   private String host;
 
   @Min(1) @Max(65535)
   private int port = 1414;
 
   @NotBlank
+  @Size(max = 48)
   private String queueManager;
 
   @NotBlank
+  @Size(max = 20)
   private String channel;
 
+  @Size(max = 64)
   private String username;
   private String password;
   @NotNull
@@ -30,16 +37,26 @@ public class ConnectionForm {
   @NotNull
   private TlsMode tlsMode = TlsMode.NONE;
 
+  @Size(max = 64)
   private String cipherSpec;
+
+  @Size(max = 512)
   private String truststorePath;
+
+  @Size(max = 512)
   private String keystorePath;
+
+  @Size(max = 64)
   private String certificateLabel;
+
+  @Size(max = 48)
   private String queueFilter = "*";
   private boolean hideSystemQueues = true;
   @Min(1)
   private int sampleIntervalSeconds = 5;
 
   private boolean prometheusExport = false;
+  @Size(max = 48)
   private String replyQueueModel = "SYSTEM.DEFAULT.MODEL.QUEUE";
   private Integer thresholdDepthMax;
   private Integer thresholdDepthPercent;

@@ -33,7 +33,7 @@
             <th scope="col" class="actions">Actions</th>
           </tr>
         </thead>
-        <tbody hx-ext="sse" sse-connect="/connections/stream"
+        <tbody hx-ext="sse" sse-connect="/connections/stream" data-reload-on-401
                hx-on::sse-error="this.closest('.table-card').classList.add('sse-down')"
                hx-on::sse-open="this.closest('.table-card').classList.remove('sse-down')">
           <th:block th:each="row : ${rows}" th:utext="${row}"></th:block>

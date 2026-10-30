@@ -115,6 +115,13 @@ class DashboardControllerTest extends PostgresTestBase {
   }
 
   @Test
+  void streamContainerReloadsOnExpiredSession() throws Exception {
+    mvc.perform(get("/connections/" + id).with(user("admin")))
+        .andExpect(content().string(containsString("data-reload-on-401")))
+        .andExpect(content().string(containsString("/js/sse-auth.js")));
+  }
+
+  @Test
   void anonymousIsRedirectedToLogin() throws Exception {
     mvc.perform(get("/connections/" + id))
         .andExpect(status().is3xxRedirection())

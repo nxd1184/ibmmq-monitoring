@@ -125,6 +125,21 @@ class ConnectionControllerTest extends PostgresTestBase {
   }
 
   @Test
+  void overLongChannelShowsFieldErrorInsteadOf500() throws Exception {
+    mvc.perform(validPost("/connections", "Prod", "channel", "C".repeat(21)))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("size must be between 0 and 20")));
+    assertThat(repo.count()).isZero();
+  }
+
+  @Test
+  void blankQueueFilterIsSavedAsWildcard() throws Exception {
+    mvc.perform(validPost("/connections", "Prod", "queueFilter", ""))
+        .andExpect(status().is3xxRedirection());
+    assertThat(repo.findAll().get(0).queueFilter()).isEqualTo("*");
+  }
+
+  @Test
   void createWithTlsMissingCipherShowsError() throws Exception {
     mvc.perform(validPost("/connections", "Prod", "tlsMode", "TLS"))
         .andExpect(status().isOk())

@@ -5,6 +5,7 @@ import com.tsa.mqmonitor.connection.MqConnection;
 import com.tsa.mqmonitor.sampling.EvaluatedSample;
 import com.tsa.mqmonitor.sampling.SampleListener;
 import com.tsa.mqmonitor.sampling.SamplerRegistry;
+import com.tsa.mqmonitor.sampling.UnknownConnectionException;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
@@ -123,8 +124,12 @@ public class SseController implements SampleListener {
     String watcherId;
     try {
       watcherId = registry.watch(id);
-    } catch (IllegalArgumentException unknown) {
+    } catch (UnknownConnectionException unknown) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+    } catch (RuntimeException ex) {
+      // e.g. the stored password cannot be decrypted with the current key: a server error, not 404
+      log.warn("Cannot start sampling connection {}: {}", id, ex.getMessage());
+      throw ex;
     }
     var sub = new Subscription(emitterFactory.get(), id, watcherId, showSystem);
     byConnection.compute(
@@ -166,27 +171,38 @@ public class SseController implements SampleListener {
     return sub.emitter;
   }
 
-  /** Runs on a sampler thread: renders once per variant and enqueues; never writes to a socket. */
+  /**
+   * Runs on a sampler thread: renders once per variant and enqueues; never writes to a socket. The
+   * dashboard and list fan-outs fail independently.
+   */
   @Override
   public void onSample(EvaluatedSample s) {
     long id = s.sample().connectionId();
-    Set<Subscription> subs = byConnection.get(id);
-    if (subs != null && !subs.isEmpty()) {
-      Map<Boolean, Map<String, String>> rendered = new LinkedHashMap<>();
-      for (Subscription sub : subs) {
-        enqueue(sub, rendered.computeIfAbsent(sub.showSystem, flag -> renderAll(s, flag, false)));
+    try {
+      Set<Subscription> subs = byConnection.get(id);
+      if (subs != null && !subs.isEmpty()) {
+        Map<Boolean, Map<String, String>> rendered = new LinkedHashMap<>();
+        for (Subscription sub : subs) {
+          enqueue(sub, rendered.computeIfAbsent(sub.showSystem, flag -> renderAll(s, flag, false)));
+        }
       }
+    } catch (RuntimeException ex) {
+      log.warn("Dashboard push failed for connection {}: {}", id, ex.toString());
     }
-    if (!listSubscriptions.isEmpty()) {
-      connections
-          .findById(id)
-          .ifPresent(
-              c -> {
-                Map<String, String> row = Map.of(rowEvent(id), renderer.renderRow(c, s));
-                for (Subscription sub : listSubscriptions) {
-                  enqueue(sub, row);
-                }
-              });
+    try {
+      if (!listSubscriptions.isEmpty()) {
+        connections
+            .findById(id)
+            .ifPresent(
+                c -> {
+                  Map<String, String> row = Map.of(rowEvent(id), renderer.renderRow(c, s));
+                  for (Subscription sub : listSubscriptions) {
+                    enqueue(sub, row);
+                  }
+                });
+      }
+    } catch (RuntimeException ex) {
+      log.warn("List push failed for connection {}: {}", id, ex.toString());
     }
   }
 

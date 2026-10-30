@@ -63,6 +63,8 @@
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
+      <!-- Pinned above the Boot BOM's driver to the version the spec Stack names. -->
+      <version>42.7.14</version>
       <scope>runtime</scope>
     </dependency>
 

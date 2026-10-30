@@ -16,7 +16,7 @@
        th:href="@{/connections/{id}(id=${connection.id},showSystem=${!showSystem})}"
        th:text="${showSystem} ? 'Hide system queues' : 'Show system queues'">Show system queues</a>
   </div>
-  <div class="dashboard-stream" hx-ext="sse"
+  <div class="dashboard-stream" hx-ext="sse" data-reload-on-401
        hx-on::sse-error="this.classList.add('sse-down')"
        hx-on::sse-open="this.classList.remove('sse-down')"
        th:sse-connect="${showSystem}

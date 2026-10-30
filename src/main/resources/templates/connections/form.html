@@ -69,7 +69,7 @@
       </p>
     </div>
     <fieldset id="tls-fields" class="tls-fieldset" th:insert="~{fragments/tls-fields :: fields}"></fieldset>
-    <details class="advanced" th:open="${#fields.hasErrors('queueFilter') or #fields.hasErrors('sampleIntervalSeconds')}">
+    <details class="advanced" th:open="${#fields.hasErrors('queueFilter') or #fields.hasErrors('sampleIntervalSeconds') or #fields.hasErrors('replyQueueModel')}">
       <summary>
         <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"/></svg>
@@ -79,7 +79,8 @@
       <div class="form-grid">
         <p class="field">
           <label for="queueFilter">Queue filter</label>
-          <input type="text" th:field="*{queueFilter}">
+          <input type="text" th:field="*{queueFilter}" placeholder="*">
+          <span class="error" th:errors="*{queueFilter}"></span>
         </p>
         <p class="field">
           <label for="sampleIntervalSeconds">Sample interval (seconds)</label>
@@ -95,6 +96,7 @@
         <p class="field">
           <label for="replyQueueModel">Reply queue model</label>
           <input type="text" th:field="*{replyQueueModel}">
+          <span class="error" th:errors="*{replyQueueModel}"></span>
         </p>
         <p class="field">
           <label for="thresholdDepthMax">Depth max</label>

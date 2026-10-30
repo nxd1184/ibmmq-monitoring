@@ -21,6 +21,7 @@ import com.tsa.mqmonitor.mq.QueueManagerInfo;
 import com.tsa.mqmonitor.sampling.EvaluatedSample;
 import com.tsa.mqmonitor.sampling.Sample;
 import com.tsa.mqmonitor.sampling.SamplerRegistry;
+import com.tsa.mqmonitor.sampling.UnknownConnectionException;
 import com.tsa.mqmonitor.support.PostgresTestBase;
 import java.time.Instant;
 import java.util.List;
@@ -237,6 +238,15 @@ class SseControllerTest extends PostgresTestBase {
   }
 
   @Test
+  void decryptFailureIsAServerErrorNot404() {
+    when(registry.watch(7L)).thenThrow(new IllegalArgumentException("stored secret was tampered with"));
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> mvc.perform(get("/connections/7/stream").with(user("admin"))))
+        .hasRootCauseInstanceOf(IllegalArgumentException.class);
+    assertThat(controller.emittersFor(7L)).isEmpty();
+  }
+
+  @Test
   void stalePushReplacesTheHeader() throws Exception {
     when(registry.watch(8L)).thenReturn("w8");
     MvcResult result =
@@ -271,6 +281,34 @@ class SseControllerTest extends PostgresTestBase {
   }
 
   @Test
+  void failingDashboardFanOutStillPushesListRow() throws Exception {
+    var reg = mock(SamplerRegistry.class);
+    var service = mock(ConnectionService.class);
+    var renderer = mock(SampleFragmentRenderer.class);
+    when(renderer.render(anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean(),
+            org.mockito.ArgumentMatchers.anyBoolean()))
+        .thenThrow(new IllegalStateException("template broken"));
+    when(renderer.renderRow(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+        .thenReturn("<tr>row</tr>");
+    when(reg.watch(10L)).thenReturn("w10");
+    when(reg.latest(org.mockito.ArgumentMatchers.anyLong())).thenReturn(Optional.empty());
+    var conn = SampleFragmentRendererTest.connection(10L);
+    when(service.findById(10L)).thenReturn(Optional.of(conn));
+    when(service.findAll()).thenReturn(List.of());
+    var emitters = new ArrayBlockingQueue<TestEmitter>(2);
+    var dash = new TestEmitter(null);
+    var list = new TestEmitter(null);
+    emitters.add(dash);
+    emitters.add(list);
+    var c = new SseController(reg, service, renderer, emitters::poll);
+    c.stream(10L, false);
+    c.listStream();
+    c.onSample(sample(10L));
+    await("list row", () -> list.received("row"));
+    c.shutdown();
+  }
+
+  @Test
   void failureBeforeTheEmitterIsReturnedStillUnwatches() {
     when(registry.watch(6L)).thenReturn("w6");
     when(registry.latest(6L)).thenThrow(new IllegalStateException("boom"));
@@ -283,7 +321,7 @@ class SseControllerTest extends PostgresTestBase {
 
   @Test
   void unknownConnectionIs404() throws Exception {
-    when(registry.watch(99L)).thenThrow(new IllegalArgumentException("Unknown connection 99"));
+    when(registry.watch(99L)).thenThrow(new UnknownConnectionException(99L));
     mvc.perform(get("/connections/99/stream").with(user("admin")))
         .andExpect(status().isNotFound());
     assertThat(controller.emittersFor(99L)).isEmpty();
@@ -291,7 +329,7 @@ class SseControllerTest extends PostgresTestBase {
 
   @Test
   void streamRequiresLogin() throws Exception {
-    mvc.perform(get("/connections/1/stream")).andExpect(status().is3xxRedirection());
+    mvc.perform(get("/connections/1/stream")).andExpect(status().isUnauthorized());
     verify(registry, never()).watch(1L);
   }
 

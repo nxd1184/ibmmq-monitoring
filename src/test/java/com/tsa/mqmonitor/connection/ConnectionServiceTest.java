@@ -103,6 +103,21 @@ class ConnectionServiceTest extends PostgresTestBase {
   }
 
   @Test
+  void testConnectionReportsUnexpectedFailureInsteadOfThrowing() {
+    when(gatewayFactory.open(any())).thenThrow(new IllegalStateException("truststore unreadable"));
+    var r = service.test(valid());
+    assertThat(r.ok()).isFalse();
+    assertThat(r.message()).isEqualTo("truststore unreadable");
+  }
+
+  @Test
+  void blankQueueFilterIsStoredAsWildcard() {
+    var f = valid();
+    f.setQueueFilter("  ");
+    assertThat(service.save(f).queueFilter()).isEqualTo("*");
+  }
+
+  @Test
   void duplicateNameRejected() {
     service.save(valid());
     assertThatThrownBy(() -> service.save(valid())).isInstanceOf(DuplicateKeyException.class);

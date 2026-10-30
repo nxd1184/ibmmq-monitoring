@@ -28,6 +28,8 @@ public class ConnectionFormValidator implements Validator {
   @Override
   public void validate(Object target, Errors errors) {
     var form = (ConnectionForm) target;
+    // A blank queue filter means "all queues"; INQUIRE_Q rejects an empty name.
+    form.setQueueFilter(ConnectionService.normalizeQueueFilter(form.getQueueFilter()));
     TlsMode mode = form.getTlsMode();
     if (mode != TlsMode.TLS && mode != TlsMode.MUTUAL_TLS) {
       return;

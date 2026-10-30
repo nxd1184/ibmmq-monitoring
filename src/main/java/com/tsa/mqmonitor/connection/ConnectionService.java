@@ -14,6 +14,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.relational.core.conversion.DbActionExecutionException;
@@ -22,6 +24,8 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class ConnectionService {
+  private static final Logger log = LoggerFactory.getLogger(ConnectionService.class);
+
   private final MqConnectionRepository repo;
   private final SecretCipher cipher;
   private final MqMonitorProperties props;
@@ -82,7 +86,7 @@ public class ConnectionService {
             form.getTruststorePath(),
             form.getKeystorePath(),
             form.getCertificateLabel(),
-            form.getQueueFilter(),
+            normalizeQueueFilter(form.getQueueFilter()),
             form.isHideSystemQueues(),
             form.getSampleIntervalSeconds(),
             form.isPrometheusExport(),
@@ -104,6 +108,11 @@ public class ConnectionService {
     }
     registry.ifAvailable(r -> r.connectionChanged(saved.id()));
     return saved;
+  }
+
+  /** A blank queue filter is stored as {@code *} (all queues). */
+  public static String normalizeQueueFilter(String filter) {
+    return StringUtils.hasText(filter) ? filter.trim() : "*";
   }
 
   public ConnectionForm toForm(MqConnection c) {
@@ -197,6 +206,11 @@ public class ConnectionService {
       return new ConnectionTestResult(true, "Connected to " + qmgr.name(), qmgr);
     } catch (MqGatewayException e) {
       return new ConnectionTestResult(false, e.getMessage(), null);
+    } catch (RuntimeException e) {
+      // e.g. an unreadable truststore or a stored password the current key cannot decrypt
+      log.warn("Connection test failed: {}", e.toString());
+      return new ConnectionTestResult(
+          false, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName(), null);
     } finally {
       if (gateway != null) {
         MqGateway gw = gateway;

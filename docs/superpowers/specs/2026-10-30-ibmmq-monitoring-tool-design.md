@@ -10,7 +10,8 @@ A web tool, like kafka-ui or Redpanda Console, that shows the **current** state 
 
 - Java 21, Maven, Spring Boot 3.5.16.
 - Thymeleaf server-rendered UI. HTMX 2.0.11 with the SSE extension 2.2.4 for realtime updates. Local static assets only, no CDN.
-- PostgreSQL (driver 42.7.14) with Flyway 13.12.0. Spring Data JDBC. Stores Connections and Thresholds only. No Samples, no history.
+- PostgreSQL (driver 42.7.14) with Flyway. Spring Data JDBC. Stores Connections and Thresholds only. No Samples, no history.
+- Flyway follows the Spring Boot BOM version (11.7.x with Boot 3.5.16) and is not pinned separately.
 - IBM MQ client `com.ibm.mq.allclient` 9.4.5.1 and `mq-jms-spring-boot-starter` 3.5.15.
 - Spring Security form login. One shared admin user. Username and password come from environment variables, supplied by a Kubernetes secret.
 - Micrometer with the Prometheus registry.

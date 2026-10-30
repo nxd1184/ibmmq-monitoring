@@ -143,8 +143,7 @@ public class SamplerRegistry {
         MqConnection c =
             connections
                 .findById(connectionId)
-                .orElseThrow(
-                    () -> new IllegalArgumentException("Unknown connection " + connectionId));
+                .orElseThrow(() -> new UnknownConnectionException(connectionId));
         e = newEntry(c);
       }
       e.watchers.add(watcherId);

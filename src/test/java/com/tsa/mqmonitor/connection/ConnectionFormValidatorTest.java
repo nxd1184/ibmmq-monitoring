@@ -24,6 +24,14 @@ class ConnectionFormValidatorTest {
   }
 
   @Test
+  void blankQueueFilterIsTreatedAsWildcard() {
+    var f = f(TlsMode.NONE);
+    f.setQueueFilter(" ");
+    assertThat(validate(f).hasErrors()).isFalse();
+    assertThat(f.getQueueFilter()).isEqualTo("*");
+  }
+
+  @Test
   void noneNeedsNothing() {
     assertThat(validate(f(TlsMode.NONE)).hasErrors()).isFalse();
   }

@@ -1,5 +1,6 @@
 package com.tsa.mqmonitor.config;
 
+import com.tsa.mqmonitor.mq.Redact;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -16,10 +17,26 @@ public record MqMonitorProperties(
         @DefaultValue Thresholds thresholds,
         @DefaultValue Mq mq) {
 
+    /** Never prints the encryption key. */
+    @Override
+    public String toString() {
+        return "MqMonitorProperties[admin=" + admin + ", encryptionKey=" + Redact.secret(encryptionKey)
+                + ", tls=" + tls + ", sampling=" + sampling + ", thresholds=" + thresholds + ", mq=" + mq + "]";
+    }
+
     public record Admin(@NotBlank String username, @NotBlank String password) {
+        @Override
+        public String toString() {
+            return "Admin[username=" + username + ", password=" + Redact.secret(password) + "]";
+        }
     }
 
     public record Tls(String truststorePath, String truststorePassword, String keystorePath, String keystorePassword) {
+        @Override
+        public String toString() {
+            return "Tls[truststorePath=" + truststorePath + ", truststorePassword=" + Redact.secret(truststorePassword)
+                    + ", keystorePath=" + keystorePath + ", keystorePassword=" + Redact.secret(keystorePassword) + "]";
+        }
     }
 
     public record Sampling(@DefaultValue("30") int watcherGraceSeconds, @DefaultValue("30") int listIntervalSeconds) {

@@ -25,6 +25,12 @@ class SecurityConfigTest extends PostgresTestBase {
     }
 
     @Test
+    void anonymousStreamGets401NotARedirect() throws Exception {
+        mvc.perform(get("/connections/1/stream")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/connections/stream")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void loginPageIsPublic() throws Exception {
         mvc.perform(get("/login")).andExpect(status().isOk());
     }
