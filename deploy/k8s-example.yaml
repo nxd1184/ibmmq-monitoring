@@ -83,8 +83,10 @@ spec:
               memory: 768Mi
       volumes:
         - name: tls
+          # optional: true lets the pod start without the mqmonitor-tls secret (connections with TLS Mode NONE).
           secret:
             secretName: mqmonitor-tls
+            optional: true
 ---
 # Service: reaches the pod inside the cluster on port 80.
 apiVersion: v1

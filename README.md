@@ -233,9 +233,37 @@ A wrong password also gives 2035 at connect time.
 ## Kubernetes
 
 [deploy/k8s-example.yaml](deploy/k8s-example.yaml) has a Secret, a ConfigMap, a Deployment and a Service.
-It mounts a TLS secret at `/etc/mqmonitor/tls` and points `MQMONITOR_TLS_TRUSTSTORE_PATH` and `MQMONITOR_TLS_KEYSTORE_PATH` into it.
 It has no Ingress.
 Run one replica.
+
+Create the TLS secret from your PKCS12 files:
+
+```sh
+kubectl create secret generic mqmonitor-tls \
+  --from-file=truststore.p12 --from-file=keystore.p12
+```
+
+Mount it in the pod and point the default store paths into it:
+
+```yaml
+env:
+  - name: MQMONITOR_TLS_TRUSTSTORE_PATH
+    value: /etc/mqmonitor/tls/truststore.p12
+  - name: MQMONITOR_TLS_KEYSTORE_PATH
+    value: /etc/mqmonitor/tls/keystore.p12
+volumeMounts:
+  - name: tls
+    mountPath: /etc/mqmonitor/tls
+    readOnly: true
+volumes:
+  - name: tls
+    secret:
+      secretName: mqmonitor-tls
+      optional: true
+```
+
+The secret is optional, so the pod also starts without it, for connections with TLS Mode `NONE`.
+Set the store passwords in `mqmonitor-secrets` (`MQMONITOR_TLS_TRUSTSTORE_PASSWORD`, `MQMONITOR_TLS_KEYSTORE_PASSWORD`).
 
 ## Development
 
