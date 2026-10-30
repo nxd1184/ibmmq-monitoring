@@ -132,4 +132,14 @@ class SamplerTest {
     verify(gw, org.mockito.Mockito.never()).inquireQueues(any(), anyBoolean());
     verify(gw, org.mockito.Mockito.never()).inquireChannels();
   }
+
+  @Test
+  void retiredSamplerNeverReopensGateway() {
+    sampler.sampleOnce();
+    sampler.retire();
+    sampler.sampleOnce();
+    sampler.sampleQueueManagerOnly();
+    verify(factory, times(1)).open(any());
+    verify(gw).close();
+  }
 }

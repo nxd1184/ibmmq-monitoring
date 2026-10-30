@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -219,5 +220,68 @@ class SamplerRegistryTest {
     scheduler.advance(Duration.ofSeconds(30));
     verify(gw).close();
     assertThat(reg.latest(1)).isPresent();
+  }
+
+  @Test
+  void graceStopThenWatchReopensOnce() {
+    var w = reg.watch(1);
+    scheduler.advance(Duration.ofSeconds(1));
+    reg.unwatch(1, w);
+    scheduler.advance(Duration.ofSeconds(30));
+    verify(gw, times(1)).close();
+    reg.watch(1);
+    scheduler.advance(Duration.ofSeconds(11));
+    verify(factory, times(2)).open(any());
+    assertThat(scheduler.periodicTasks()).hasSize(1);
+  }
+
+  @Test
+  void runStartedBeforeStopDoesNotReopenGateway() {
+    var w = reg.watch(1);
+    Runnable lateRun = scheduler.periodicTasks().get(0).runnable;
+    scheduler.advance(Duration.ofSeconds(1));
+    reg.unwatch(1, w);
+    scheduler.advance(Duration.ofSeconds(30));
+    lateRun.run();
+    verify(factory, times(1)).open(any());
+    verify(gw, times(1)).close();
+  }
+
+  @Test
+  void listPathRetiresSamplerReplacedDuringRun() {
+    var swapped = new AtomicBoolean();
+    when(gw.inquireQueueManager())
+        .thenAnswer(
+            inv -> {
+              if (swapped.compareAndSet(false, true)) {
+                connections.put(2L, connection(2, 15, false));
+                reg.connectionChanged(2);
+              }
+              return new QueueManagerInfo("QM", "RUNNING", 940, "UNIX");
+            });
+    reg.watchList("w");
+    scheduler.fireAll();
+    verify(factory, times(1)).open(any());
+    assertThat(reg.latest(2)).isEmpty();
+    reg.unwatchList("w");
+    verify(gw, times(1)).close();
+  }
+
+  @Test
+  void listRunDoesNotResurrectDeletedConnection() {
+    when(service.findAll())
+        .thenAnswer(
+            inv -> {
+              var snapshot = List.copyOf(connections.values());
+              connections.remove(2L);
+              reg.connectionDeleted(2);
+              return snapshot;
+            });
+    reg.watchList("w");
+    scheduler.fireAll();
+    assertThat(reg.latest(2)).isEmpty();
+    assertThat(reg.latest(1)).isPresent();
+    verify(factory, times(1)).open(any());
+    verify(service, times(1)).targetFor(any(MqConnection.class));
   }
 }

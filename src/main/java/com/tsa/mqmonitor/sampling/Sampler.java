@@ -21,8 +21,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Samples one connection over a single long-lived gateway. Methods are synchronized so two
- * samples of one connection never run at the same time and close() never races a sample.
+ * Samples one connection over a single long-lived gateway. Sampling methods are synchronized so
+ * two samples of one connection never run at the same time and a gateway close never races a
+ * sample. A suspended or retired sampler never touches MQ: the flags are checked under the same
+ * monitor that guards the gateway, so a run that starts after suspend()/retire() cannot reopen a
+ * gateway that the registry has released.
  */
 public class Sampler {
   private static final Logger log = LoggerFactory.getLogger(Sampler.class);
@@ -37,6 +40,8 @@ public class Sampler {
   private final Map<String, Instant> noConsumerSince = new HashMap<>();
   private MqGateway gateway;
   private volatile EvaluatedSample latest;
+  private volatile boolean suspended;
+  private volatile boolean retired;
 
   public Sampler(
       MqConnection c,
@@ -57,6 +62,9 @@ public class Sampler {
 
   public synchronized EvaluatedSample sampleOnce() {
     Instant now = clock.instant();
+    if (!active()) {
+      return inactiveResult(now);
+    }
     Sample sample;
     try {
       MqGateway gw = gateway();
@@ -74,6 +82,9 @@ public class Sampler {
 
   public synchronized EvaluatedSample sampleQueueManagerOnly() {
     Instant now = clock.instant();
+    if (!active()) {
+      return inactiveResult(now);
+    }
     Sample sample;
     try {
       QueueManagerInfo qmgr = gateway().inquireQueueManager();
@@ -88,7 +99,52 @@ public class Sampler {
     return Optional.ofNullable(latest);
   }
 
-  public synchronized void close() {
+  /** Permanently stops this sampler: closes the gateway and never opens another one. */
+  public void close() {
+    retire();
+  }
+
+  /** Permanent: used when the registry discards this sampler (rebuild, delete, shutdown). */
+  public void retire() {
+    retired = true;
+    synchronized (this) {
+      closeGateway();
+    }
+  }
+
+  /** Blocks MQ access until resume(). Cheap and lock-free, so the registry can call it under its lock. */
+  void suspend() {
+    suspended = true;
+  }
+
+  void resume() {
+    suspended = false;
+  }
+
+  /** Closes the gateway if the sampler is still suspended or retired; a resumed sampler keeps it. */
+  public synchronized void releaseGateway() {
+    if (!active()) {
+      closeGateway();
+    }
+  }
+
+  boolean isRetired() {
+    return retired;
+  }
+
+  private boolean active() {
+    return !suspended && !retired;
+  }
+
+  private EvaluatedSample inactiveResult(Instant now) {
+    EvaluatedSample last = latest;
+    return last != null
+        ? last
+        : evaluator.evaluate(
+            Sample.failed(connection.id(), now, "sampler stopped"), thresholds, Map.of(), now);
+  }
+
+  private void closeGateway() {
     if (gateway != null) {
       MqGateway gw = gateway;
       gateway = null;
@@ -110,7 +166,7 @@ public class Sampler {
   private Sample failed(Instant now, RuntimeException e) {
     String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     log.debug("Sample of connection {} failed: {}", connection.id(), message);
-    close();
+    closeGateway();
     return Sample.failed(connection.id(), now, message);
   }
 
