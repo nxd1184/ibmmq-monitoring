@@ -75,8 +75,12 @@ A browser that is currently viewing a Connection's dashboard and receives its Sa
 _Avoid_: Subscriber, client, session
 
 **Health**:
-A verdict of `HEALTHY` or `UNHEALTHY` with a reason, computed from a Sample against Thresholds. Applies to a Connection, a Queue or a Channel.
+A verdict of `HEALTHY` or `UNHEALTHY`, computed from a Sample against Thresholds. Applies to a Connection, a Queue or a Channel. It carries a Health Reason and a free-text detail.
 _Avoid_: Status (use Status for raw MQ state), state, alert
+
+**Health Reason**:
+The bounded category behind an `UNHEALTHY` verdict: depth threshold, depth percent, no consumer, oldest message age, channel not running, unreachable, or objects unhealthy. Metrics label by Health Reason, never by the free-text detail.
+_Avoid_: Cause, error code
 
 **Status**:
 The raw state reported by MQ, for example a Channel status of `RUNNING` or `STOPPED`. Health is derived from Status; they are not the same word.
