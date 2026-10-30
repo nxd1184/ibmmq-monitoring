@@ -132,6 +132,12 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <excludedGroups>${test.excludedGroups}</excludedGroups>
+          <!-- *IT classes carry @Tag("integration"), so the default run still skips them. -->
+          <includes>
+            <include>**/*Test.java</include>
+            <include>**/*Tests.java</include>
+            <include>**/*IT.java</include>
+          </includes>
         </configuration>
       </plugin>
     </plugins>

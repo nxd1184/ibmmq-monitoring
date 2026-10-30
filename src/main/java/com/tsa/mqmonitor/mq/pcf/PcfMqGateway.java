@@ -68,7 +68,8 @@ public class PcfMqGateway implements MqGateway {
     q.addParameter(
         CMQCFC.MQIACF_Q_ATTRS,
         new int[] {CMQC.MQCA_Q_NAME, CMQC.MQIA_CURRENT_Q_DEPTH, CMQC.MQIA_MAX_Q_DEPTH});
-    List<PCFMessage> queues = exchange(q, filter);
+    // A filter that matches no queue is reported as MQRC_UNKNOWN_OBJECT_NAME.
+    List<PCFMessage> queues = exchange(q, filter, CMQC.MQRC_UNKNOWN_OBJECT_NAME);
 
     var st = new PCFMessage(CMQCFC.MQCMD_INQUIRE_Q_STATUS);
     st.addParameter(CMQC.MQCA_Q_NAME, filter);

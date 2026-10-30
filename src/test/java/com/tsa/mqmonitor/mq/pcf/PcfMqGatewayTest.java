@@ -212,8 +212,15 @@ class PcfMqGatewayTest {
   }
 
   @Test
-  void otherReasonBecomesGatewayException() {
+  void filterMatchingNoQueueIsEmptyList() {
     t.fail(CMQCFC.MQCMD_INQUIRE_Q, new PCFException(2, CMQC.MQRC_UNKNOWN_OBJECT_NAME, null));
+    t.fail(CMQCFC.MQCMD_INQUIRE_Q_STATUS, new PCFException(2, CMQC.MQRC_UNKNOWN_OBJECT_NAME, null));
+    assertThat(gw.inquireQueues("NOMATCH.*", true)).isEmpty();
+  }
+
+  @Test
+  void otherReasonBecomesGatewayException() {
+    t.fail(CMQCFC.MQCMD_INQUIRE_Q, new PCFException(2, CMQC.MQRC_NO_MSG_AVAILABLE, null));
     assertThatThrownBy(() -> gw.inquireQueues("*", true))
         .isExactlyInstanceOf(MqGatewayException.class);
   }
