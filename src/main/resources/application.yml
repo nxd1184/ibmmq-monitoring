@@ -15,6 +15,11 @@ management:
     web:
       exposure:
         include: health,prometheus
+  # The JMS health indicator would try the default queue manager at localhost:1414 and
+  # mark the app DOWN. Queue managers are monitored per connection, not as app health.
+  health:
+    jms:
+      enabled: false
   # Prometheus shows MQ series only; see MetricsConfig for the matching MeterFilter.
   metrics:
     enable:

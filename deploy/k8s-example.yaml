@@ -1,0 +1,99 @@
+# Example only. Replace every placeholder before use. There is no Ingress here.
+# Secret: the app secrets and the database password. Use your own secret manager if you have one.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mqmonitor-secrets
+type: Opaque
+stringData:
+  MQMONITOR_ADMIN_USERNAME: "CHANGE_ME"
+  MQMONITOR_ADMIN_PASSWORD: "CHANGE_ME"
+  # Base64 of 32 random bytes. Create one with: openssl rand -base64 32
+  MQMONITOR_ENCRYPTION_KEY: "CHANGE_ME"
+  SPRING_DATASOURCE_PASSWORD: "CHANGE_ME"
+  # Passwords of the PKCS12 truststore and keystore (only for TLS and mutual TLS).
+  MQMONITOR_TLS_TRUSTSTORE_PASSWORD: "CHANGE_ME"
+  MQMONITOR_TLS_KEYSTORE_PASSWORD: "CHANGE_ME"
+---
+# ConfigMap: non-secret database settings.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mqmonitor-config
+data:
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres.example.svc:5432/mqmonitor"
+  SPRING_DATASOURCE_USERNAME: "mqmonitor"
+---
+# The TLS secret is created from your PKCS12 files, for example:
+#   kubectl create secret generic mqmonitor-tls \
+#     --from-file=truststore.p12 --from-file=keystore.p12
+# Deployment: one replica. Do not scale it up, because each replica would sample MQ on its own.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ibmmq-monitoring-tool
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ibmmq-monitoring-tool
+  template:
+    metadata:
+      labels:
+        app: ibmmq-monitoring-tool
+    spec:
+      containers:
+        - name: app
+          image: ibmmq-monitoring-tool:0.1.0
+          ports:
+            - containerPort: 8080
+          # Environment from the Secret and the ConfigMap above.
+          envFrom:
+            - secretRef:
+                name: mqmonitor-secrets
+            - configMapRef:
+                name: mqmonitor-config
+          env:
+            # Deployment-wide certificate stores. A connection can override the paths.
+            - name: MQMONITOR_TLS_TRUSTSTORE_PATH
+              value: /etc/mqmonitor/tls/truststore.p12
+            - name: MQMONITOR_TLS_KEYSTORE_PATH
+              value: /etc/mqmonitor/tls/keystore.p12
+            # Optional. Set to "true" only for MQ 7.5 or 8.0 queue managers. It weakens TLS.
+            # - name: MQMONITOR_LEGACY_TLS
+            #   value: "true"
+          # Mounts the TLS secret read-only.
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/mqmonitor/tls
+              readOnly: true
+          # Ready when the health endpoint answers.
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+      volumes:
+        - name: tls
+          secret:
+            secretName: mqmonitor-tls
+---
+# Service: reaches the pod inside the cluster on port 80.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ibmmq-monitoring-tool
+spec:
+  selector:
+    app: ibmmq-monitoring-tool
+  ports:
+    - port: 80
+      targetPort: 8080

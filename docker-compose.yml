@@ -9,3 +9,25 @@ services:
     # Run the app with SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/mqmonitor
     ports:
       - "5433:5432"
+
+  # Local demo only. The values below are demo values. Do not use them anywhere real.
+  # The demo MQ queue manager is started separately:
+  #   docker run -d --name mq-demo --platform linux/amd64 -p 1414:1414 \
+  #     -e LICENSE=accept -e MQ_QMGR_NAME=QM1 \
+  #     -e MQ_ADMIN_PASSWORD=passw0rd -e MQ_APP_PASSWORD=passw0rd \
+  #     icr.io/ibm-messaging/mq:latest
+  # From inside this app container the MQ host is host.docker.internal (port 1414).
+  app:
+    build: .
+    depends_on:
+      - postgres
+    environment:
+      MQMONITOR_ADMIN_USERNAME: admin
+      MQMONITOR_ADMIN_PASSWORD: demo-admin-password
+      # Base64 of 32 bytes. Demo value.
+      MQMONITOR_ENCRYPTION_KEY: ZGVtby1rZXktZG8tbm90LXVzZS1pbi1wcm9kLTAwMDA=
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/mqmonitor
+      SPRING_DATASOURCE_USERNAME: mqmonitor
+      SPRING_DATASOURCE_PASSWORD: mqmonitor
+    ports:
+      - "8080:8080"

@@ -1,0 +1,23 @@
+# Legacy TLS override for old IBM MQ queue managers (7.5 and 8.0).
+#
+# WARNING: this file weakens TLS. Enable it only for queue managers that need it,
+# by setting MQMONITOR_LEGACY_TLS=true. The setting applies to the whole JVM,
+# so every connection in the tool is affected, not only the old queue manager.
+#
+# Why it exists: the JDK 21 default blocks TLSv1, TLSv1.1, SHA1-signed handshakes
+# and all TLS_RSA_* cipher suites. Old queue managers cannot use anything newer.
+# This file re-enables these cipher specs:
+#   TLS_RSA_WITH_AES_128_CBC_SHA256
+#   TLS_RSA_WITH_AES_256_CBC_SHA256
+#   TLS_RSA_WITH_AES_256_CBC_SHA
+#
+# Derived from the JDK 21.0.10 default:
+#   jdk.tls.disabledAlgorithms=SSLv3, TLSv1, TLSv1.1, DTLSv1.0, RC4, DES,
+#       MD5withRSA, DH keySize < 1024, EC keySize < 224, 3DES_EDE_CBC, anon, NULL,
+#       ECDH, TLS_RSA_*, rsa_pkcs1_sha1 usage HandshakeSignature,
+#       ecdsa_sha1 usage HandshakeSignature, dsa_sha1 usage HandshakeSignature
+# Removed: TLSv1, TLSv1.1, TLS_RSA_*, rsa_pkcs1_sha1 / ecdsa_sha1 / dsa_sha1 handshake signatures.
+# Everything else stays disabled (SSLv3, RC4, DES, 3DES, MD5withRSA, anon, NULL, ECDH, small keys).
+jdk.tls.disabledAlgorithms=SSLv3, DTLSv1.0, RC4, DES, \
+    MD5withRSA, DH keySize < 1024, EC keySize < 224, 3DES_EDE_CBC, anon, NULL, \
+    ECDH
