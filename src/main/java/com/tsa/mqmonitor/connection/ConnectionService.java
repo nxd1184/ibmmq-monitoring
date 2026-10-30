@@ -8,10 +8,12 @@ import com.tsa.mqmonitor.mq.MqGatewayException;
 import com.tsa.mqmonitor.mq.MqGatewayFactory;
 import com.tsa.mqmonitor.mq.MqTarget;
 import com.tsa.mqmonitor.mq.TlsSettings;
+import com.tsa.mqmonitor.sampling.SamplerRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.relational.core.conversion.DbActionExecutionException;
 import org.springframework.stereotype.Service;
@@ -23,16 +25,19 @@ public class ConnectionService {
   private final SecretCipher cipher;
   private final MqMonitorProperties props;
   private final MqGatewayFactory gatewayFactory;
+  private final ObjectProvider<SamplerRegistry> registry;
 
   public ConnectionService(
       MqConnectionRepository repo,
       SecretCipher cipher,
       MqMonitorProperties props,
-      MqGatewayFactory gatewayFactory) {
+      MqGatewayFactory gatewayFactory,
+      ObjectProvider<SamplerRegistry> registry) {
     this.repo = repo;
     this.cipher = cipher;
     this.props = props;
     this.gatewayFactory = gatewayFactory;
+    this.registry = registry;
   }
 
   public List<MqConnection> findAll() {
@@ -43,8 +48,13 @@ public class ConnectionService {
     return repo.findById(id);
   }
 
+  public List<MqConnection> findPrometheusExports() {
+    return repo.findByPrometheusExportTrue();
+  }
+
   public void delete(long id) {
     repo.deleteById(id);
+    registry.ifAvailable(r -> r.connectionDeleted(id));
   }
 
   public MqConnection save(ConnectionForm form) {
@@ -82,14 +92,17 @@ public class ConnectionService {
             form.getThresholdOldestMessageAgeSeconds(),
             createdAt,
             now);
+    MqConnection saved;
     try {
-      return repo.save(entity);
+      saved = repo.save(entity);
     } catch (DbActionExecutionException e) {
       if (e.getCause() instanceof DataAccessException dae) {
         throw dae;
       }
       throw e;
     }
+    registry.ifAvailable(r -> r.connectionChanged(saved.id()));
+    return saved;
   }
 
   public ConnectionForm toForm(MqConnection c) {
