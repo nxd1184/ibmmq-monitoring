@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout('Connections', ~{::main})}">
+<body>
+<main class="connections">
+  <h1>Connections</h1>
+  <p><a href="/connections/new" th:href="@{/connections/new}">New connection</a></p>
+  <p th:if="${#lists.isEmpty(rows)}">No connections yet.</p>
+  <table th:unless="${#lists.isEmpty(rows)}">
+    <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">Address</th>
+        <th scope="col">Queue manager</th>
+        <th scope="col">Client</th>
+        <th scope="col">TLS</th>
+        <th scope="col">Reachability</th>
+        <th scope="col">Health</th>
+        <th scope="col">Actions</th>
+      </tr>
+    </thead>
+    <tbody hx-ext="sse" sse-connect="/connections/stream">
+      <th:block th:each="row : ${rows}" th:utext="${row}"></th:block>
+    </tbody>
+  </table>
+</main>
+</body>
+</html>

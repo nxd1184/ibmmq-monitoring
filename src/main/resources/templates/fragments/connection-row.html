@@ -2,7 +2,8 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <table>
-  <tr th:fragment="content" th:id="|conn-${connection.id}|">
+  <tr th:fragment="content" th:id="|conn-${connection.id}|"
+      th:attr="sse-swap=|conn-${connection.id}|" hx-swap="outerHTML">
     <th scope="row" th:text="${connection.name}">Prod QM</th>
     <td th:text="|${connection.host}:${connection.port}|">host:1414</td>
     <td th:text="${connection.queueManager}">QM1</td>
@@ -17,7 +18,12 @@
     <td th:if="${sample != null}" th:class="${fmt.healthClass(sample.connection)}"
         th:title="${fmt.reason(sample.connection)}"
         th:text="${fmt.healthText(sample.connection)}">healthy</td>
-    <td><a th:href="|/connections/${connection.id}|">Dashboard</a></td>
+    <td>
+      <a th:href="|/connections/${connection.id}|">Dashboard</a>
+      <a th:href="|/connections/${connection.id}/edit|">Edit</a>
+      <button type="button" hx-target="closest tr" hx-swap="outerHTML"
+              th:attr="hx-post=|/connections/${connection.id}/delete|,hx-confirm=|Delete connection '${connection.name}'? This cannot be undone.|">Delete</button>
+    </td>
   </tr>
 </table>
 </body>

@@ -7,7 +7,7 @@
   <script th:src="@{/webjars/htmx.org/dist/htmx.min.js}"></script>
   <script th:src="@{/webjars/htmx-ext-sse/dist/sse.js}"></script>
 </head>
-<body hx-ext="sse">
+<body hx-ext="sse" th:attr='hx-headers=|{"${_csrf.headerName}": "${_csrf.token}"}|'>
   <nav>
     <a th:href="@{/connections}">Connections</a>
     <form th:action="@{/logout}" method="post">
