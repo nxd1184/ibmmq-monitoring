@@ -1,6 +1,10 @@
 package com.tsa.mqmonitor.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.tsa.mqmonitor.connection.ClientType;
@@ -9,6 +13,7 @@ import com.tsa.mqmonitor.connection.ConnectionService;
 import com.tsa.mqmonitor.connection.MqConnectionRepository;
 import com.tsa.mqmonitor.connection.TlsMode;
 import com.tsa.mqmonitor.health.HealthVerdict;
+import com.tsa.mqmonitor.mq.MqGateway;
 import com.tsa.mqmonitor.mq.MqGatewayFactory;
 import com.tsa.mqmonitor.mq.QueueInfo;
 import com.tsa.mqmonitor.mq.QueueManagerInfo;
@@ -18,12 +23,7 @@ import com.tsa.mqmonitor.support.PostgresTestBase;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-import com.tsa.mqmonitor.mq.MqGateway;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,7 +74,11 @@ class PrometheusEndpointTest extends PostgresTestBase {
 
     var body = mvc.perform(get("/actuator/prometheus")).andReturn().getResponse().getContentAsString();
 
-    assertThat(body).contains("ibmmq_queue_depth{").contains("connection=\"QM1\"");
+    assertThat(body)
+        .contains("ibmmq_queue_depth{connection=\"QM1\",qmgr=\"QM1\",queue=\"APP.Q\"} 7.0")
+        .contains("ibmmq_qmgr_reachable{connection=\"QM1\",qmgr=\"QM1\"} 1.0")
+        .contains("ibmmq_health{connection=\"QM1\",name=\"QM1\",object=\"connection\","
+            + "qmgr=\"QM1\",reason=\"ok\"} 1.0");
     assertThat(body)
         .doesNotContain("jvm_", "process_", "system_", "http_server_", "tomcat_", "logback_",
             "executor_", "jdbc_", "hikaricp_", "disk_", "application_");

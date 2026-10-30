@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tsa.mqmonitor.connection.ClientType;
 import com.tsa.mqmonitor.connection.MqConnection;
 import com.tsa.mqmonitor.connection.TlsMode;
+import com.tsa.mqmonitor.health.HealthReason;
 import com.tsa.mqmonitor.health.HealthVerdict;
 import com.tsa.mqmonitor.mq.ChannelInfo;
 import com.tsa.mqmonitor.mq.QueueInfo;
@@ -84,10 +85,10 @@ class MqMeterBinderTest {
     String reason = "depth 80 is 80% of max 100";
     binder.onSample(
         sample(c, List.of(queue("APP.Q", 80, null)), List.of(),
-            Map.of("APP.Q", HealthVerdict.unhealthy(reason))));
+            Map.of("APP.Q", HealthVerdict.unhealthy(HealthReason.DEPTH_PERCENT, reason))));
     assertThat(
             reg.get("ibmmq.health")
-                .tags("object", "queue", "name", "APP.Q", "reason", reason, "connection", "QM1")
+                .tags("object", "queue", "name", "APP.Q", "reason", "depth_percent", "connection", "QM1")
                 .gauge().value())
         .isEqualTo(0);
     assertThat(reg.get("ibmmq.health").tags("object", "connection", "name", "QM1").gauge().value())
@@ -109,8 +110,9 @@ class MqMeterBinderTest {
     var c = connection(1, "QM1", true);
     binder.onSample(sample(c, List.of(queue("A", 1, 5)), List.of(new ChannelInfo("C", "T", "RUNNING")), Map.of()));
     var failed = new EvaluatedSample(Sample.failed(1, T0, "down"),
-        HealthVerdict.unhealthy("unreachable"), Map.of(), Map.of());
+        HealthVerdict.unhealthy(HealthReason.UNREACHABLE, "down"), Map.of(), Map.of());
     binder.onSample(failed);
+    assertThat(reg.get("ibmmq.health").tag("reason", "unreachable").gauge().value()).isEqualTo(0);
     assertThat(reg.get("ibmmq.qmgr.reachable").gauge().value()).isEqualTo(0);
     assertThat(reg.find("ibmmq.queue.depth").gauge()).isNull();
     assertThat(reg.find("ibmmq.channel.status").gauge()).isNull();

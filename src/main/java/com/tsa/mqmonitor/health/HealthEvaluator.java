@@ -13,25 +13,28 @@ public class HealthEvaluator {
 
   public HealthVerdict queue(QueueInfo q, Thresholds t, Instant now, Instant noConsumerSince) {
     if (t.depthMax() != null && q.depth() >= t.depthMax()) {
-      return HealthVerdict.unhealthy("depth " + q.depth() + " reached threshold " + t.depthMax());
+      return HealthVerdict.unhealthy(
+          HealthReason.DEPTH_THRESHOLD, "depth " + q.depth() + " reached threshold " + t.depthMax());
     }
     if (q.maxDepth() > 0) {
       int percent = (int) ((long) q.depth() * 100 / q.maxDepth());
       if (percent >= t.depthPercent()) {
         return HealthVerdict.unhealthy(
+            HealthReason.DEPTH_PERCENT,
             "depth " + q.depth() + " is " + percent + "% of max " + q.maxDepth());
       }
     }
     if (q.openInputCount() != null && q.openInputCount() == 0 && noConsumerSince != null) {
       long seconds = Duration.between(noConsumerSince, now).toSeconds();
       if (seconds >= t.noConsumerSeconds()) {
-        return HealthVerdict.unhealthy("no consumer for " + seconds + "s");
+        return HealthVerdict.unhealthy(HealthReason.NO_CONSUMER, "no consumer for " + seconds + "s");
       }
     }
     if (t.oldestMessageAgeSeconds() != null
         && q.oldestMessageAgeSeconds() != null
         && q.oldestMessageAgeSeconds() > t.oldestMessageAgeSeconds()) {
       return HealthVerdict.unhealthy(
+          HealthReason.OLDEST_MESSAGE_AGE,
           "oldest message age "
               + q.oldestMessageAgeSeconds()
               + "s over "
@@ -44,7 +47,7 @@ public class HealthEvaluator {
   public HealthVerdict channel(ChannelInfo c) {
     return "RUNNING".equals(c.status())
         ? HealthVerdict.healthy()
-        : HealthVerdict.unhealthy("channel status " + c.status());
+        : HealthVerdict.unhealthy(HealthReason.CHANNEL_NOT_RUNNING, "channel status " + c.status());
   }
 
   public EvaluatedSample evaluate(
@@ -52,7 +55,8 @@ public class HealthEvaluator {
     if (!s.reachable()) {
       return new EvaluatedSample(
           s,
-          HealthVerdict.unhealthy("queue manager unreachable: " + s.error()),
+          HealthVerdict.unhealthy(
+              HealthReason.UNREACHABLE, "queue manager unreachable: " + s.error()),
           Map.of(),
           Map.of());
     }
@@ -75,7 +79,7 @@ public class HealthEvaluator {
       reason = reason == null ? part : reason + ", " + part;
     }
     HealthVerdict connection =
-        reason == null ? HealthVerdict.healthy() : HealthVerdict.unhealthy(reason);
+        reason == null ? HealthVerdict.healthy() : HealthVerdict.unhealthy(HealthReason.OBJECTS_UNHEALTHY, reason);
     return new EvaluatedSample(s, connection, queues, channels);
   }
 

@@ -38,4 +38,12 @@ class HealthEvaluatorTest {
     var s = new Sample(1, now, new QueueManagerInfo("QM1", "RUNNING", 940, "UNIX"), List.of(q(90, 100, 1, null)), List.of(), null);
     assertThat(eval.evaluate(s, t, Map.of(), now).connection().reason()).isEqualTo("1 queue unhealthy");
   }
+  @Test void codesAreAssigned() {
+    assertThat(eval.queue(q(80, 100, 1, null), t, now, null).code()).isEqualTo(HealthReason.DEPTH_PERCENT);
+    assertThat(eval.queue(q(10, 5000, 1, null), t.withOverrides(10, null, null, null), now, null).code()).isEqualTo(HealthReason.DEPTH_THRESHOLD);
+    assertThat(eval.queue(q(1, 100, 0, null), t, now, now.minusSeconds(60)).code()).isEqualTo(HealthReason.NO_CONSUMER);
+    assertThat(eval.queue(q(1, 100, 1, 301), t.withOverrides(null, null, null, 300), now, null).code()).isEqualTo(HealthReason.OLDEST_MESSAGE_AGE);
+    assertThat(eval.channel(new ChannelInfo("C", "SVRCONN", "STOPPED")).code()).isEqualTo(HealthReason.CHANNEL_NOT_RUNNING);
+    assertThat(HealthVerdict.healthy().code()).isEqualTo(HealthReason.OK);
+  }
 }
