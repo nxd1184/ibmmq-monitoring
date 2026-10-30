@@ -104,6 +104,17 @@ class DashboardControllerTest extends PostgresTestBase {
   }
 
   @Test
+  void oldRetainedSampleRendersStaleOnFirstPaint() throws Exception {
+    var latest = SseControllerTest.sample(id);
+    when(registry.latest(id)).thenReturn(Optional.of(latest));
+    when(registry.isStale(id, latest)).thenReturn(true);
+    mvc.perform(get("/connections/" + id).with(user("admin")))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("Stale · last sample")))
+        .andExpect(content().string(not(containsString("live-word"))));
+  }
+
+  @Test
   void anonymousIsRedirectedToLogin() throws Exception {
     mvc.perform(get("/connections/" + id))
         .andExpect(status().is3xxRedirection())

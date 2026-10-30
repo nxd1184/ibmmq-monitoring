@@ -36,12 +36,18 @@ public class SampleFragmentRenderer {
   }
 
   public String render(String fragment, EvaluatedSample s, boolean showSystem) {
+    return render(fragment, s, showSystem, false);
+  }
+
+  /** {@code stale} switches the qmgr header to "Stale · last sample <time>". */
+  public String render(String fragment, EvaluatedSample s, boolean showSystem, boolean stale) {
     if (!FRAGMENTS.contains(fragment)) {
       throw new IllegalArgumentException("Unknown fragment " + fragment);
     }
     Context ctx = new Context();
     ctx.setVariable("sample", s);
     ctx.setVariable("showSystem", showSystem);
+    ctx.setVariable("stale", stale);
     ctx.setVariable("queues", visibleQueues(s.sample().queues(), showSystem));
     return process(fragment, ctx);
   }

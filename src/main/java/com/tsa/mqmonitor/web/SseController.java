@@ -136,7 +136,9 @@ public class SseController implements SampleListener {
         });
     register(sub);
     try {
-      registry.latest(id).ifPresent(s -> enqueue(sub, renderAll(s, showSystem)));
+      registry
+          .latest(id)
+          .ifPresent(s -> enqueue(sub, renderAll(s, showSystem, registry.isStale(id, s))));
     } catch (RuntimeException ex) {
       close(sub); // the emitter is never returned, so no callback would release the watch
       throw ex;
@@ -172,7 +174,7 @@ public class SseController implements SampleListener {
     if (subs != null && !subs.isEmpty()) {
       Map<Boolean, Map<String, String>> rendered = new LinkedHashMap<>();
       for (Subscription sub : subs) {
-        enqueue(sub, rendered.computeIfAbsent(sub.showSystem, flag -> renderAll(s, flag)));
+        enqueue(sub, rendered.computeIfAbsent(sub.showSystem, flag -> renderAll(s, flag, false)));
       }
     }
     if (!listSubscriptions.isEmpty()) {
@@ -185,6 +187,28 @@ public class SseController implements SampleListener {
                   enqueue(sub, row);
                 }
               });
+    }
+  }
+
+  /**
+   * Runs on a sampler thread each watchdog tick while the newest sample is too old: replaces the
+   * dashboard header with "Stale · last sample <time>". The periodic push is also the heartbeat
+   * of an otherwise idle stream.
+   */
+  @Override
+  public void onStale(EvaluatedSample latest) {
+    long id = latest.sample().connectionId();
+    Set<Subscription> subs = byConnection.get(id);
+    if (subs == null || subs.isEmpty()) {
+      return;
+    }
+    try {
+      Map<String, String> header = Map.of("qmgr", renderer.render("qmgr", latest, false, true));
+      for (Subscription sub : subs) {
+        enqueue(sub, header);
+      }
+    } catch (RuntimeException ex) {
+      log.warn("Stale push failed for connection {}: {}", id, ex.toString());
     }
   }
 
@@ -218,10 +242,10 @@ public class SseController implements SampleListener {
     }
   }
 
-  private Map<String, String> renderAll(EvaluatedSample s, boolean showSystem) {
+  private Map<String, String> renderAll(EvaluatedSample s, boolean showSystem, boolean stale) {
     Map<String, String> events = new LinkedHashMap<>();
     for (String name : new String[] {"qmgr", "queues", "channels"}) {
-      events.put(name, renderer.render(name, s, showSystem));
+      events.put(name, renderer.render(name, s, showSystem, stale));
     }
     return events;
   }

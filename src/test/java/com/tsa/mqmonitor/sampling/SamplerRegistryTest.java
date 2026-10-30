@@ -307,4 +307,43 @@ class SamplerRegistryTest {
     assertThat(removed).containsExactly(1L);
   }
 
+  @Test
+  void watchdogPushesStaleWhenNoSampleForThreeIntervals() {
+    SampleListener listener = mock(SampleListener.class);
+    reg.addListener(listener);
+    reg.watch(1); // interval 5s
+    scheduler.advance(Duration.ofSeconds(1)); // first sample at T0
+    // The periodic task stops producing samples, as a hung sample would.
+    scheduler.periodicTasks().get(0).cancel(false);
+    scheduler.advance(Duration.ofSeconds(14)); // T0+15s: exactly 3 intervals, not yet stale
+    verify(listener, never()).onStale(any());
+    scheduler.advance(Duration.ofSeconds(5)); // T0+20s
+    verify(listener, times(1)).onStale(any());
+    assertThat(reg.isStale(1, reg.latest(1).orElseThrow())).isTrue();
+    scheduler.advance(Duration.ofSeconds(5)); // the push repeats every interval (heartbeat)
+    verify(listener, times(2)).onStale(any());
+  }
+
+  @Test
+  void freshSamplesNeverTriggerStale() {
+    SampleListener listener = mock(SampleListener.class);
+    reg.addListener(listener);
+    reg.watch(1);
+    scheduler.advance(Duration.ofMinutes(2));
+    verify(listener, never()).onStale(any());
+    assertThat(reg.isStale(1, reg.latest(1).orElseThrow())).isFalse();
+  }
+
+  @Test
+  void stoppedEntryHasNoWatchdogButRetainedSampleIsStale() {
+    SampleListener listener = mock(SampleListener.class);
+    reg.addListener(listener);
+    var w = reg.watch(1);
+    scheduler.advance(Duration.ofSeconds(1));
+    reg.unwatch(1, w);
+    scheduler.advance(Duration.ofSeconds(30)); // grace stop
+    scheduler.advance(Duration.ofMinutes(5));
+    verify(listener, never()).onStale(any());
+    assertThat(reg.isStale(1, reg.latest(1).orElseThrow())).isTrue();
+  }
 }

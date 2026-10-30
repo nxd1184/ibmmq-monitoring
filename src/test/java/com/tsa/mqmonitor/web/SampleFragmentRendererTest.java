@@ -143,6 +143,23 @@ class SampleFragmentRendererTest {
     assertThat(html).contains("unreachable").contains("title=\"host down\"");
   }
 
+  @Test
+  void staleQmgrHeaderShowsLastSampleTimeWithWarningStyle() {
+    var s =
+        new EvaluatedSample(
+            new Sample(1L, AT, new QueueManagerInfo("QM1", "RUNNING", 940, "UNIX"), List.of(), List.of(), null),
+            HealthVerdict.healthy(),
+            Map.of(),
+            Map.of());
+    var html = renderer.render("qmgr", s, false, true);
+    assertThat(html)
+        .contains("Stale · last sample")
+        .contains("live-stale")
+        .contains("2026-10-30T10:15:30Z")
+        .doesNotContain("live-word");
+    assertThat(renderer.render("qmgr", s, false)).contains("live-word").doesNotContain("Stale");
+  }
+
   static MqConnection connection(long id) {
     return new MqConnection(
         id, "Prod QM", "mq.example", 1414, "QM1", "DEV.APP.SVRCONN", null, null,

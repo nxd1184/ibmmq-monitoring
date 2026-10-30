@@ -4,7 +4,8 @@
 <section th:fragment="content" class="card qmgr" th:with="s=${sample.sample}, v=${sample.connection}">
   <div class="card-header">
     <h2>Queue manager</h2>
-    <p class="live" th:classappend="${s.reachable()} ? '' : 'live-failed'"><svg class="dot" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg><span class="live-label" th:if="${s.reachable()}"><span class="live-word">Live</span> · sampled</span><span th:unless="${s.reachable()}">Sample failed at</span> <time th:text="${fmt.utc(s.takenAt)}">2026-01-01T00:00:00Z</time></p>
+    <p th:if="${stale}" class="live live-stale" role="status"><svg class="dot" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg><span>Stale · last sample</span> <time th:text="${fmt.utc(s.takenAt)}">2026-01-01T00:00:00Z</time></p>
+    <p th:unless="${stale}" class="live" th:classappend="${s.reachable()} ? '' : 'live-failed'"><svg class="dot" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg><span class="live-label" th:if="${s.reachable()}"><span class="live-word">Live</span> · sampled</span><span th:unless="${s.reachable()}">Sample failed at</span> <time th:text="${fmt.utc(s.takenAt)}">2026-01-01T00:00:00Z</time></p>
   </div>
   <p th:unless="${s.reachable()}" class="sample-error" role="alert">
     <strong>Unreachable:</strong> <span th:text="${s.error}">error</span>

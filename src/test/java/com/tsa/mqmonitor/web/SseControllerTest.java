@@ -237,6 +237,40 @@ class SseControllerTest extends PostgresTestBase {
   }
 
   @Test
+  void stalePushReplacesTheHeader() throws Exception {
+    when(registry.watch(8L)).thenReturn("w8");
+    MvcResult result =
+        mvc.perform(get("/connections/8/stream").with(user("admin")))
+            .andExpect(request().asyncStarted())
+            .andReturn();
+    controller.onStale(sample(8L));
+    await("stale header", bodyContains(result, "live-stale"));
+    finish(result, onlyEmitter(8L));
+    assertThat(result.getResponse().getContentAsString())
+        .contains("event:qmgr")
+        .contains("live-stale")
+        .doesNotContain("event:queues");
+  }
+
+  @Test
+  void streamOpenRendersStaleWhenRetainedSampleIsOld() throws Exception {
+    when(registry.watch(9L)).thenReturn("w9");
+    when(registry.latest(9L)).thenReturn(Optional.of(sample(9L)));
+    when(registry.isStale(org.mockito.ArgumentMatchers.eq(9L), org.mockito.ArgumentMatchers.any()))
+        .thenReturn(true);
+    MvcResult result =
+        mvc.perform(get("/connections/9/stream").with(user("admin")))
+            .andExpect(request().asyncStarted())
+            .andReturn();
+    await("initial events", bodyContains(result, "event:channels"));
+    finish(result, onlyEmitter(9L));
+    assertThat(result.getResponse().getContentAsString())
+        .contains("live-stale")
+        .contains("last sample")
+        .doesNotContain("live-word");
+  }
+
+  @Test
   void failureBeforeTheEmitterIsReturnedStillUnwatches() {
     when(registry.watch(6L)).thenReturn("w6");
     when(registry.latest(6L)).thenThrow(new IllegalStateException("boom"));

@@ -39,8 +39,10 @@ class DashboardController {
     EvaluatedSample latest = registry.latest(id).orElse(null);
     Map<String, String> fragments = new LinkedHashMap<>();
     if (latest != null) {
+      // A suspended sampler keeps its last sample; never label an old one "Live".
+      boolean stale = registry.isStale(id, latest);
       for (String name : new String[] {"qmgr", "queues", "channels"}) {
-        fragments.put(name, renderer.render(name, latest, showSystem));
+        fragments.put(name, renderer.render(name, latest, showSystem, stale));
       }
     }
     model.addAttribute("connection", connection);

@@ -8,6 +8,7 @@ import com.tsa.mqmonitor.mq.MqGatewayFactory;
 import jakarta.annotation.PreDestroy;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -41,6 +42,9 @@ import org.springframework.stereotype.Component;
 public class SamplerRegistry {
   private static final Logger log = LoggerFactory.getLogger(SamplerRegistry.class);
 
+  /** A sample older than this many sample intervals is stale. */
+  public static final int STALE_AFTER_INTERVALS = 3;
+
   private final ConnectionService connections;
   private final MqGatewayFactory factory;
   private final HealthEvaluator evaluator;
@@ -63,6 +67,8 @@ public class SamplerRegistry {
     volatile Sampler sampler;
     ScheduledFuture<?> periodic;
     ScheduledFuture<?> pendingStop;
+    /** One-shot, re-armed on every tick while {@code periodic} runs. */
+    ScheduledFuture<?> watchdog;
 
     Entry(MqConnection connection, Sampler sampler) {
       this.connection = connection;
@@ -102,6 +108,30 @@ public class SamplerRegistry {
     }
     Sampler listOnly = listSamplers.get(connectionId);
     return listOnly == null ? Optional.empty() : listOnly.latest();
+  }
+
+  /**
+   * True when {@code s} is older than {@link #STALE_AFTER_INTERVALS} sample intervals of its
+   * connection. Used on first paint and stream open; running samplers are also checked by the
+   * watchdog, which pushes {@link SampleListener#onStale}.
+   */
+  public boolean isStale(long connectionId, EvaluatedSample s) {
+    if (s == null) {
+      return false;
+    }
+    Entry e = entries.get(connectionId);
+    MqConnection c = e != null ? e.connection : connections.findById(connectionId).orElse(null);
+    return c != null && isStale(s, interval(c), clock.instant());
+  }
+
+  static boolean isStale(EvaluatedSample s, Duration interval, Instant now) {
+    return Duration.between(s.sample().takenAt(), now)
+            .compareTo(interval.multipliedBy(STALE_AFTER_INTERVALS))
+        > 0;
+  }
+
+  private static Duration interval(MqConnection c) {
+    return Duration.ofSeconds(Math.max(1, c.sampleIntervalSeconds()));
   }
 
   public String watch(long connectionId) {
@@ -275,6 +305,7 @@ public class SamplerRegistry {
         e.periodic.cancel(false);
         e.periodic = null;
       }
+      cancelWatchdog(e);
       e.connection = fresh;
       e.sampler = newSampler(fresh);
       if (wasRunning) {
@@ -367,10 +398,52 @@ public class SamplerRegistry {
     if (e.periodic == null) {
       Sampler s = e.sampler;
       s.resume();
-      Duration interval = Duration.ofSeconds(Math.max(1, e.connection.sampleIntervalSeconds()));
+      Duration interval = interval(e.connection);
       e.periodic = scheduler.scheduleWithFixedDelay(safely(s::sampleOnce), interval);
+      armWatchdog(id, e, interval);
     }
     return listSamplers.remove(id);
+  }
+
+  /** Caller holds the lock. */
+  private void armWatchdog(long id, Entry e, Duration interval) {
+    cancelWatchdog(e);
+    e.watchdog =
+        scheduler.schedule(safely(() -> watchdogTick(id, e)), clock.instant().plus(interval));
+  }
+
+  /**
+   * Runs once per sample interval while the entry samples. A sample that hangs or a starved
+   * scheduler leaves {@code latest} behind; listeners then get a stale push every tick, which
+   * also serves as the SSE heartbeat for an idle stream.
+   */
+  private void watchdogTick(long id, Entry e) {
+    EvaluatedSample latest;
+    Duration interval;
+    synchronized (lock) {
+      if (entries.get(id) != e || e.periodic == null) {
+        return;
+      }
+      interval = interval(e.connection);
+      armWatchdog(id, e, interval);
+      latest = e.sampler.latest().orElse(null);
+    }
+    if (latest != null && isStale(latest, interval, clock.instant())) {
+      for (SampleListener l : listeners) {
+        try {
+          l.onStale(latest);
+        } catch (RuntimeException ex) {
+          log.warn("Stale listener failed for connection {}: {}", id, ex.toString());
+        }
+      }
+    }
+  }
+
+  private void cancelWatchdog(Entry e) {
+    if (e.watchdog != null) {
+      e.watchdog.cancel(false);
+      e.watchdog = null;
+    }
   }
 
   private void scheduleStopIfIdle(long id, Entry e) {
@@ -414,6 +487,7 @@ public class SamplerRegistry {
       e.periodic.cancel(false);
       e.periodic = null;
     }
+    cancelWatchdog(e);
     cancelPendingStop(e);
   }
 
