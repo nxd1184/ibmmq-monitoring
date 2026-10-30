@@ -242,6 +242,7 @@ public class Sampler {
     if (retired) {
       return evaluated;
     }
+    logReachabilityChange(latest, evaluated);
     latest = evaluated;
     for (SampleListener listener : listeners) {
       try {
@@ -252,5 +253,17 @@ public class Sampler {
       }
     }
     return evaluated;
+  }
+
+  /** One WARN when a connection stops answering and one INFO when it answers again. */
+  private void logReachabilityChange(EvaluatedSample previous, EvaluatedSample next) {
+    boolean wasReachable = previous == null || previous.sample().reachable();
+    boolean isReachable = next.sample().reachable();
+    if (wasReachable && !isReachable) {
+      log.warn("Connection {} ({}) is unreachable: {}",
+          connection.id(), connection.name(), next.sample().error());
+    } else if (!wasReachable && isReachable) {
+      log.info("Connection {} ({}) is reachable again", connection.id(), connection.name());
+    }
   }
 }
