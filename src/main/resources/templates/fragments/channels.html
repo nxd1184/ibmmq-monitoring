@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<section th:fragment="content" class="channels">
+  <h2>Channels</h2>
+  <p th:if="${#lists.isEmpty(sample.sample.channels)}">No channels in this sample.</p>
+  <table th:unless="${#lists.isEmpty(sample.sample.channels)}">
+    <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">Type</th>
+        <th scope="col">Status</th>
+        <th scope="col">Health</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="ch : ${sample.sample.channels}" th:with="v=${sample.channels[ch.name]}">
+        <th scope="row" th:text="${ch.name}">DEV.APP.SVRCONN</th>
+        <td th:text="${fmt.text(ch.type)}">SVRCONN</td>
+        <td th:text="${fmt.text(ch.status)}">RUNNING</td>
+        <td th:class="${fmt.healthClass(v)}" th:title="${fmt.reason(v)}"
+            th:text="${fmt.healthText(v)}">healthy</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+</body>
+</html>

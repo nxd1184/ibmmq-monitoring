@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<section th:fragment="content" class="qmgr" th:with="s=${sample.sample}, v=${sample.connection}">
+  <h2>Queue manager</h2>
+  <p th:unless="${s.reachable()}" class="sample-error" role="alert">
+    <strong>Unreachable:</strong> <span th:text="${s.error}">error</span>
+  </p>
+  <dl>
+    <dt>Name</dt>
+    <dd th:text="${s.qmgr != null ? fmt.text(s.qmgr.name) : 'n/a'}">QM1</dd>
+    <dt>Status</dt>
+    <dd th:text="${s.qmgr != null ? fmt.text(s.qmgr.status) : 'n/a'}">RUNNING</dd>
+    <dt>Platform</dt>
+    <dd th:text="${s.qmgr != null ? fmt.text(s.qmgr.platform) : 'n/a'}">UNIX</dd>
+    <dt>Command level</dt>
+    <dd th:text="${s.qmgr != null ? fmt.num(s.qmgr.commandLevel) : 'n/a'}">940</dd>
+    <dt>Sampled at (UTC)</dt>
+    <dd><time th:text="${fmt.utc(s.takenAt)}">2026-01-01T00:00:00Z</time></dd>
+    <dt>Health</dt>
+    <dd th:class="${fmt.healthClass(v)}" th:title="${fmt.reason(v)}"
+        th:text="${fmt.healthText(v) + ': ' + fmt.reason(v)}">healthy: ok</dd>
+  </dl>
+</section>
+</body>
+</html>
