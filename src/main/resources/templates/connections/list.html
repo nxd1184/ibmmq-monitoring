@@ -2,27 +2,43 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: layout('Connections', ~{::main})}">
 <body>
-<main class="connections">
-  <h1>Connections</h1>
-  <p><a href="/connections/new" th:href="@{/connections/new}">New connection</a></p>
-  <p th:if="${#lists.isEmpty(rows)}">No connections yet.</p>
-  <table th:unless="${#lists.isEmpty(rows)}">
-    <thead>
-      <tr>
-        <th scope="col">Name</th>
-        <th scope="col">Address</th>
-        <th scope="col">Queue manager</th>
-        <th scope="col">Client</th>
-        <th scope="col">TLS</th>
-        <th scope="col">Reachability</th>
-        <th scope="col">Health</th>
-        <th scope="col">Actions</th>
-      </tr>
-    </thead>
-    <tbody hx-ext="sse" sse-connect="/connections/stream">
-      <th:block th:each="row : ${rows}" th:utext="${row}"></th:block>
-    </tbody>
-  </table>
+<main class="page connections">
+  <div class="page-header">
+    <div>
+      <h1>Connections</h1>
+      <p class="page-sub">Queue managers this instance samples. Rows update live.</p>
+    </div>
+    <a class="btn btn-primary" href="/connections/new" th:href="@{/connections/new}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
+      New connection
+    </a>
+  </div>
+  <div th:if="${#lists.isEmpty(rows)}" class="card empty-state">
+    <p>No connections yet.</p>
+    <p>Add a queue manager to start monitoring.</p>
+  </div>
+  <div th:unless="${#lists.isEmpty(rows)}" class="card table-card">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Address</th>
+            <th scope="col">Queue manager</th>
+            <th scope="col">Client</th>
+            <th scope="col">TLS</th>
+            <th scope="col">Reachability</th>
+            <th scope="col">Health</th>
+            <th scope="col" class="actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody hx-ext="sse" sse-connect="/connections/stream">
+          <th:block th:each="row : ${rows}" th:utext="${row}"></th:block>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </main>
 </body>
 </html>

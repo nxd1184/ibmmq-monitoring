@@ -1,25 +1,26 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
-<section th:fragment="content" class="qmgr" th:with="s=${sample.sample}, v=${sample.connection}">
-  <h2>Queue manager</h2>
+<section th:fragment="content" class="card qmgr" th:with="s=${sample.sample}, v=${sample.connection}">
+  <div class="card-header">
+    <h2>Queue manager</h2>
+    <p class="live" th:classappend="${s.reachable()} ? '' : 'live-failed'"><svg class="dot" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg><span th:text="${s.reachable()} ? 'Live · sampled' : 'Sample failed at'">Live · sampled</span> <time th:text="${fmt.utc(s.takenAt)}">2026-01-01T00:00:00Z</time></p>
+  </div>
   <p th:unless="${s.reachable()}" class="sample-error" role="alert">
     <strong>Unreachable:</strong> <span th:text="${s.error}">error</span>
   </p>
-  <dl>
-    <dt>Name</dt>
-    <dd th:text="${s.qmgr != null ? fmt.text(s.qmgr.name) : 'n/a'}">QM1</dd>
-    <dt>Status</dt>
-    <dd th:text="${s.qmgr != null ? fmt.text(s.qmgr.status) : 'n/a'}">RUNNING</dd>
-    <dt>Platform</dt>
-    <dd th:text="${s.qmgr != null ? fmt.text(s.qmgr.platform) : 'n/a'}">UNIX</dd>
-    <dt>Command level</dt>
-    <dd th:text="${s.qmgr != null ? fmt.num(s.qmgr.commandLevel) : 'n/a'}">940</dd>
-    <dt>Sampled at (UTC)</dt>
-    <dd><time th:text="${fmt.utc(s.takenAt)}">2026-01-01T00:00:00Z</time></dd>
-    <dt>Health</dt>
-    <dd th:class="${fmt.healthClass(v)}" th:title="${fmt.reason(v)}"
-        th:text="${fmt.healthText(v) + ': ' + fmt.reason(v)}">healthy: ok</dd>
+  <dl class="kv">
+    <div><dt>Name</dt>
+      <dd th:text="${s.qmgr != null ? fmt.text(s.qmgr.name) : 'n/a'}">QM1</dd></div>
+    <div><dt>Status</dt>
+      <dd th:text="${s.qmgr != null ? fmt.text(s.qmgr.status) : 'n/a'}">RUNNING</dd></div>
+    <div><dt>Platform</dt>
+      <dd th:text="${s.qmgr != null ? fmt.text(s.qmgr.platform) : 'n/a'}">UNIX</dd></div>
+    <div><dt>Command level</dt>
+      <dd th:text="${s.qmgr != null ? fmt.num(s.qmgr.commandLevel) : 'n/a'}">940</dd></div>
+    <div class="kv-health"><dt>Health</dt>
+      <dd th:class="${fmt.healthClass(v)}" th:title="${fmt.reason(v)}"><span class="status"><svg class="dot" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg><span th:text="${fmt.healthText(v)}">healthy</span></span>
+        <span class="reason" th:text="${fmt.reason(v)}">ok</span></dd></div>
   </dl>
 </section>
 </body>

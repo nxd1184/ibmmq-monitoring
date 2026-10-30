@@ -4,28 +4,30 @@
 <th:block th:fragment="fields" th:object="${connectionForm}">
   <th:block th:if="${connectionForm.tlsMode.name() != 'NONE'}">
     <legend>TLS</legend>
-    <p>
-      <label for="cipherSpec">Cipher spec</label>
-      <input type="text" th:field="*{cipherSpec}">
-      <span class="error" th:errors="*{cipherSpec}"></span>
-    </p>
-    <p>
-      <label for="truststorePath">Truststore path</label>
-      <input type="text" th:field="*{truststorePath}">
-      <span class="error" th:errors="*{truststorePath}"></span>
-    </p>
-    <th:block th:if="${connectionForm.tlsMode.name() == 'MUTUAL_TLS'}">
-      <p>
-        <label for="keystorePath">Keystore path</label>
-        <input type="text" th:field="*{keystorePath}">
-        <span class="error" th:errors="*{keystorePath}"></span>
+    <div class="form-grid">
+      <p class="field">
+        <label for="cipherSpec">Cipher spec<span class="req" aria-hidden="true">*</span></label>
+        <input type="text" th:field="*{cipherSpec}">
+        <span class="error" th:errors="*{cipherSpec}"></span>
       </p>
-      <p>
-        <label for="certificateLabel">Certificate label</label>
-        <input type="text" th:field="*{certificateLabel}">
-        <span class="error" th:errors="*{certificateLabel}"></span>
+      <p class="field">
+        <label for="truststorePath">Truststore path</label>
+        <input type="text" th:field="*{truststorePath}">
+        <span class="error" th:errors="*{truststorePath}"></span>
       </p>
-    </th:block>
+      <th:block th:if="${connectionForm.tlsMode.name() == 'MUTUAL_TLS'}">
+        <p class="field">
+          <label for="keystorePath">Keystore path</label>
+          <input type="text" th:field="*{keystorePath}">
+          <span class="error" th:errors="*{keystorePath}"></span>
+        </p>
+        <p class="field">
+          <label for="certificateLabel">Certificate label</label>
+          <input type="text" th:field="*{certificateLabel}">
+          <span class="error" th:errors="*{certificateLabel}"></span>
+        </p>
+      </th:block>
+    </div>
   </th:block>
 </th:block>
 </body>

@@ -5,24 +5,24 @@
   <tr th:fragment="content" th:id="|conn-${connection.id}|"
       th:attr="sse-swap=|conn-${connection.id}|" hx-swap="outerHTML">
     <th scope="row" th:text="${connection.name}">Prod QM</th>
-    <td th:text="|${connection.host}:${connection.port}|">host:1414</td>
-    <td th:text="${connection.queueManager}">QM1</td>
+    <td class="mono" th:text="|${connection.host}:${connection.port}|">host:1414</td>
+    <td class="mono" th:text="${connection.queueManager}">QM1</td>
     <td th:text="${fmt.text(connection.clientType)}">NATIVE</td>
     <td th:text="${fmt.text(connection.tlsMode)}">NONE</td>
-    <td th:if="${sample == null}" class="reachability-waiting">waiting</td>
+    <td th:if="${sample == null}" class="reachability-waiting"><span class="status"><svg class="dot" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg>waiting</span></td>
     <td th:if="${sample != null}"
         th:class="${sample.sample.reachable() ? 'reachability-reachable' : 'reachability-unreachable'}"
-        th:title="${sample.sample.reachable() ? null : sample.sample.error}"
-        th:text="${sample.sample.reachable() ? 'reachable' : 'unreachable'}">reachable</td>
-    <td th:if="${sample == null}" class="health-unknown">n/a</td>
+        th:title="${sample.sample.reachable() ? null : sample.sample.error}"><span class="status"><svg class="dot" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg><span th:text="${sample.sample.reachable() ? 'reachable' : 'unreachable'}">reachable</span></span></td>
+    <td th:if="${sample == null}" class="health-unknown"><span class="status"><svg class="dot" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg>n/a</span></td>
     <td th:if="${sample != null}" th:class="${fmt.healthClass(sample.connection)}"
-        th:title="${fmt.reason(sample.connection)}"
-        th:text="${fmt.healthText(sample.connection)}">healthy</td>
-    <td>
-      <a th:href="|/connections/${connection.id}|">Dashboard</a>
-      <a th:href="|/connections/${connection.id}/edit|">Edit</a>
-      <button type="button" hx-target="closest tr" hx-swap="outerHTML"
-              th:attr="hx-post=|/connections/${connection.id}/delete|,hx-confirm=|Delete connection '${connection.name}'? This cannot be undone.|">Delete</button>
+        th:title="${fmt.reason(sample.connection)}"><span class="status"><svg class="dot" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg><span th:text="${fmt.healthText(sample.connection)}">healthy</span></span></td>
+    <td class="actions">
+      <div class="action-group">
+        <a class="btn btn-secondary btn-sm" th:href="|/connections/${connection.id}|">Dashboard</a>
+        <a class="btn btn-ghost btn-sm" th:href="|/connections/${connection.id}/edit|">Edit</a>
+        <button type="button" class="btn btn-danger btn-sm" hx-target="closest tr" hx-swap="outerHTML"
+                th:attr="hx-post=|/connections/${connection.id}/delete|,hx-confirm=|Delete connection '${connection.name}'? This cannot be undone.|">Delete</button>
+      </div>
     </td>
   </tr>
 </table>

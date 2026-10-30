@@ -2,30 +2,30 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout :: layout(${connection.name}, ~{::main})}">
 <body>
-<main class="dashboard">
-  <h1 th:text="${connection.name}">Connection</h1>
-  <p>
-    <span th:text="|${connection.host}:${connection.port}|">host:1414</span>,
-    queue manager <span th:text="${connection.queueManager}">QM1</span>
-  </p>
-  <p>
-    <a th:href="@{/connections/{id}(id=${connection.id},showSystem=${!showSystem})}"
+<main class="page dashboard">
+  <div class="page-header">
+    <div>
+      <p class="breadcrumb"><a th:href="@{/connections}">Connections</a> /</p>
+      <h1 th:text="${connection.name}">Connection</h1>
+      <p class="page-sub">
+        <span class="mono" th:text="|${connection.host}:${connection.port}|">host:1414</span>
+        &middot; queue manager <span class="mono" th:text="${connection.queueManager}">QM1</span>
+      </p>
+    </div>
+    <a class="btn btn-secondary"
+       th:href="@{/connections/{id}(id=${connection.id},showSystem=${!showSystem})}"
        th:text="${showSystem} ? 'Hide system queues' : 'Show system queues'">Show system queues</a>
-  </p>
-  <div hx-ext="sse"
+  </div>
+  <div class="dashboard-stream" hx-ext="sse"
        th:sse-connect="${showSystem}
            ? @{/connections/{id}/stream(id=${connection.id},showSystem=true)}
            : @{/connections/{id}/stream(id=${connection.id})}">
     <div sse-swap="qmgr">
-      <p th:if="${latest == null}" class="waiting">Waiting for first sample&hellip;</p>
+      <p th:if="${latest == null}" class="card waiting" role="status">Waiting for first sample&hellip;</p>
       <th:block th:if="${latest != null}" th:utext="${fragments['qmgr']}"></th:block>
     </div>
-    <div sse-swap="queues">
-      <th:block th:if="${latest != null}" th:utext="${fragments['queues']}"></th:block>
-    </div>
-    <div sse-swap="channels">
-      <th:block th:if="${latest != null}" th:utext="${fragments['channels']}"></th:block>
-    </div>
+    <div sse-swap="queues"><th:block th:if="${latest != null}" th:utext="${fragments['queues']}"></th:block></div>
+    <div sse-swap="channels"><th:block th:if="${latest != null}" th:utext="${fragments['channels']}"></th:block></div>
   </div>
 </main>
 </body>

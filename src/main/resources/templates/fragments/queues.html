@@ -1,38 +1,41 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
-<section th:fragment="content" class="queues">
-  <h2>Queues</h2>
-  <p th:if="${queues.isEmpty()}">No queues in this sample.</p>
-  <table th:unless="${queues.isEmpty()}">
-    <thead>
-      <tr>
-        <th scope="col">Name</th>
-        <th scope="col">Depth</th>
-        <th scope="col">Max depth</th>
-        <th scope="col">Open input</th>
-        <th scope="col">Open output</th>
-        <th scope="col">Oldest message age</th>
-        <th scope="col">Last put</th>
-        <th scope="col">Last get</th>
-        <th scope="col">Health</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr th:each="q : ${queues}" th:with="v=${sample.queues[q.name]}">
-        <th scope="row" th:text="${q.name}">DEV.Q1</th>
-        <td th:text="${q.depth}">0</td>
-        <td th:text="${q.maxDepth}">5000</td>
-        <td th:text="${fmt.num(q.openInputCount)}">0</td>
-        <td th:text="${fmt.num(q.openOutputCount)}">0</td>
-        <td th:text="${fmt.age(q.oldestMessageAgeSeconds)}">0s</td>
-        <td th:text="${fmt.time(q.lastPut)}">n/a</td>
-        <td th:text="${fmt.time(q.lastGet)}">n/a</td>
-        <td th:class="${fmt.healthClass(v)}" th:title="${fmt.reason(v)}"
-            th:text="${fmt.healthText(v)}">healthy</td>
-      </tr>
-    </tbody>
-  </table>
+<section th:fragment="content" class="card queues">
+  <div class="card-header">
+    <h2>Queues <span class="count" th:text="${queues.size()}">3</span></h2>
+  </div>
+  <p th:if="${queues.isEmpty()}" class="waiting">No queues in this sample.</p>
+  <div class="table-wrap" th:unless="${queues.isEmpty()}">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col" class="num">Depth</th>
+          <th scope="col" class="num">Max depth</th>
+          <th scope="col" class="num">Open input</th>
+          <th scope="col" class="num">Open output</th>
+          <th scope="col" class="num">Oldest message age</th>
+          <th scope="col">Last put</th>
+          <th scope="col">Last get</th>
+          <th scope="col">Health</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="q : ${queues}" th:with="v=${sample.queues[q.name]}">
+          <th scope="row" class="ident" th:text="${q.name}">DEV.Q1</th>
+          <td class="num" th:text="${q.depth}">0</td>
+          <td class="num" th:text="${q.maxDepth}">5000</td>
+          <td class="num" th:text="${fmt.num(q.openInputCount)}">0</td>
+          <td class="num" th:text="${fmt.num(q.openOutputCount)}">0</td>
+          <td class="num" th:text="${fmt.age(q.oldestMessageAgeSeconds)}">0s</td>
+          <td class="mono" th:text="${fmt.time(q.lastPut)}">n/a</td>
+          <td class="mono" th:text="${fmt.time(q.lastGet)}">n/a</td>
+          <td th:class="${fmt.healthClass(v)}" th:title="${fmt.reason(v)}"><span class="status"><svg class="dot" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg><span th:text="${fmt.healthText(v)}">healthy</span></span><span class="cell-reason" th:if="${fmt.healthClass(v) == 'health-unhealthy'}" th:text="${fmt.reason(v)}">reason</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </section>
 </body>
 </html>

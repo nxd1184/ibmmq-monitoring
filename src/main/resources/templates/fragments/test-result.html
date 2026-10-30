@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
-<div th:fragment="content" role="status">
+<div th:fragment="content" role="status" class="test-result">
   <ul th:if="${!#lists.isEmpty(errors)}" class="test-errors">
     <li th:each="e : ${errors}" th:text="${e}">error</li>
   </ul>
-  <p th:if="${result != null and result.ok}" class="test-ok" th:text="${result.message}">Connected to QM1</p>
-  <p th:if="${result != null and !result.ok}" class="test-failed" th:text="${result.message}">failure</p>
+  <p th:if="${result != null and result.ok}" class="test-ok"><strong>Connection OK.</strong> <span th:text="${result.message}">Connected to QM1</span></p>
+  <p th:if="${result != null and !result.ok}" class="test-failed"><strong>Connection failed.</strong> <span th:text="${result.message}">failure</span></p>
 </div>
 </body>
 </html>

@@ -219,6 +219,20 @@ class ConnectionControllerTest extends PostgresTestBase {
   }
 
   @Test
+  void tlsFieldsFragmentKeepsTypedValues() throws Exception {
+    mvc.perform(
+            get("/connections/tls-fields")
+                .param("tlsMode", "MUTUAL_TLS")
+                .param("cipherSpec", "TLS_AES_128_GCM_SHA256")
+                .param("truststorePath", "/etc/mq/trust.p12")
+                .with(user("admin")))
+        .andExpect(status().isOk())
+        .andExpect(content().string(containsString("value=\"TLS_AES_128_GCM_SHA256\"")))
+        .andExpect(content().string(containsString("value=\"/etc/mq/trust.p12\"")))
+        .andExpect(content().string(containsString("name=\"keystorePath\"")));
+  }
+
+  @Test
   void deleteRemovesRow() throws Exception {
     long id = connections.save(valid("Prod")).id();
     mvc.perform(post("/connections/" + id + "/delete").with(user("admin")).with(csrf()))

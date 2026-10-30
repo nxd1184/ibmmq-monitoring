@@ -1,19 +1,33 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
   <meta charset="UTF-8">
-  <title>Sign in</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · IBM MQ Monitor</title>
   <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
-<body>
-  <main class="login">
-    <h1>IBM MQ Monitor</h1>
-    <p th:if="${param.error}" class="error">Invalid username or password.</p>
-    <p th:if="${param.logout}">You have been signed out.</p>
+<body class="login-body">
+  <main class="login card">
+    <div class="login-head">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
+      <h1>IBM MQ Monitor</h1>
+      <p class="muted">Sign in to continue</p>
+    </div>
+    <p th:if="${param.error}" class="error notice" role="alert">Invalid username or password.</p>
+    <p th:if="${param.logout}" class="notice info" role="status">You have been signed out.</p>
     <form th:action="@{/login}" method="post">
-      <label>Username <input type="text" name="username" autofocus required></label>
-      <label>Password <input type="password" name="password" required></label>
-      <button type="submit">Sign in</button>
+      <p class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" autofocus required>
+      </p>
+      <p class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      </p>
+      <button type="submit" class="btn btn-primary">Sign in</button>
     </form>
   </main>
 </body>

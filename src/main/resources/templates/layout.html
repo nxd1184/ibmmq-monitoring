@@ -1,19 +1,31 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" th:fragment="layout(title, content)">
+<html lang="en" xmlns:th="http://www.thymeleaf.org" th:fragment="layout(title, content)">
 <head>
   <meta charset="UTF-8">
-  <title th:text="${title}">IBM MQ Monitor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title + ' · IBM MQ Monitor'}">IBM MQ Monitor</title>
   <link rel="stylesheet" th:href="@{/css/app.css}">
   <script th:src="@{/webjars/htmx.org/dist/htmx.min.js}"></script>
   <script th:src="@{/webjars/htmx-ext-sse/dist/sse.js}"></script>
 </head>
 <body hx-ext="sse" th:attr='hx-headers=|{"${_csrf.headerName}": "${_csrf.token}"}|'>
-  <nav>
-    <a th:href="@{/connections}">Connections</a>
-    <form th:action="@{/logout}" method="post">
-      <button type="submit">Log out</button>
-    </form>
-  </nav>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" th:href="@{/connections}" aria-label="IBM MQ Monitor home">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+        </svg>
+        <span class="brand-text">IBM MQ Monitor</span>
+      </a>
+      <nav class="topnav" aria-label="Primary">
+        <a class="nav-link" th:href="@{/connections}">Connections</a>
+      </nav>
+      <form class="logout" th:action="@{/logout}" method="post">
+        <button type="submit" class="btn btn-ghost">Log out</button>
+      </form>
+    </div>
+  </header>
   <main th:replace="${content}">content</main>
 </body>
 </html>
