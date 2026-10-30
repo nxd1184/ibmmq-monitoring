@@ -26,7 +26,7 @@ class SampleFragmentRendererTest {
 
   private final SampleFragmentRenderer renderer = new SampleFragmentRenderer(engine());
 
-  private static SpringTemplateEngine engine() {
+  static SpringTemplateEngine engine() {
     var resolver = new ClassLoaderTemplateResolver();
     resolver.setPrefix("templates/");
     resolver.setSuffix(".html");

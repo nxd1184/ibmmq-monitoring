@@ -1,7 +1,11 @@
 package com.tsa.mqmonitor.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +26,18 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
+import java.util.stream.Collectors;
+import com.tsa.mqmonitor.connection.ConnectionService;
 import jakarta.servlet.AsyncEvent;
 import java.io.IOException;
 import org.springframework.mock.web.MockAsyncContext;
@@ -48,6 +64,77 @@ class SseControllerTest extends PostgresTestBase {
             null);
     return new EvaluatedSample(
         s, HealthVerdict.healthy(), Map.of("DEV.Q1", HealthVerdict.healthy()), Map.of());
+  }
+
+  static void await(String what, BooleanSupplier condition) throws InterruptedException {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+    while (!condition.getAsBoolean()) {
+      if (System.nanoTime() > deadline) {
+        throw new AssertionError("Timed out waiting for " + what);
+      }
+      Thread.sleep(5);
+    }
+  }
+
+  private static BooleanSupplier bodyContains(MvcResult result, String text) {
+    return () -> {
+      try {
+        return result.getResponse().getContentAsString().contains(text);
+      } catch (Exception e) {
+        throw new IllegalStateException(e);
+      }
+    };
+  }
+
+  /** Emitter that records sends (optionally blocking first) and exposes the completion hook. */
+  static final class TestEmitter extends SseEmitter {
+    final List<Runnable> completions = new CopyOnWriteArrayList<>();
+    final List<String> sent = new CopyOnWriteArrayList<>();
+    final CountDownLatch release;
+
+    TestEmitter(CountDownLatch release) {
+      super(0L);
+      this.release = release;
+    }
+
+    @Override
+    public synchronized void onCompletion(Runnable callback) {
+      completions.add(callback);
+      super.onCompletion(callback);
+    }
+
+    /** What the container does when the client goes away. */
+    void fireCompletion() {
+      completions.forEach(Runnable::run);
+    }
+
+    @Override
+    public void send(SseEventBuilder builder) throws java.io.IOException {
+      if (release != null) {
+        try {
+          release.await();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new java.io.IOException(e);
+        }
+      }
+      sent.add(builder.build().stream().map(d -> d.getData().toString()).collect(Collectors.joining()));
+    }
+
+    boolean received(String text) {
+      return sent.stream().anyMatch(x -> x.contains(text));
+    }
+  }
+
+  private static SseController standalone(SamplerRegistry reg, BlockingQueue<TestEmitter> emitters) {
+    return new SseController(
+        reg,
+        mock(ConnectionService.class),
+        new SampleFragmentRenderer(SampleFragmentRendererTest.engine()),
+        () -> {
+          TestEmitter next = emitters.poll();
+          return next != null ? next : new TestEmitter(null);
+        });
   }
 
   private SseEmitter onlyEmitter(long id) {
@@ -108,6 +195,7 @@ class SseControllerTest extends PostgresTestBase {
     onlyEmitter(5L).complete(); // a later send now throws IllegalStateException
 
     controller.onSample(sample(5L));
+    verify(registry, timeout(2000)).unwatch(5L, "w5");
     controller.onSample(sample(5L));
 
     verify(registry, times(1)).unwatch(5L, "w5");
@@ -122,6 +210,7 @@ class SseControllerTest extends PostgresTestBase {
         mvc.perform(get("/connections/1/stream").with(user("admin")))
             .andExpect(request().asyncStarted())
             .andReturn();
+    await("initial events", bodyContains(result, "event:channels"));
     finish(result, onlyEmitter(1L));
     verify(registry).unwatch(1L, "w1");
 
@@ -139,6 +228,7 @@ class SseControllerTest extends PostgresTestBase {
             .andReturn();
     controller.onSample(sample(3L));
     controller.onSample(sample(2L));
+    await("pushed sample", bodyContains(result, "12345"));
     finish(result, onlyEmitter(2L));
 
     String body = result.getResponse().getContentAsString();
@@ -188,5 +278,92 @@ class SseControllerTest extends PostgresTestBase {
 
     verify(registry, times(1)).unwatchList(watcherId);
     assertThat(controller.listEmitters()).isEmpty();
+  }
+
+  @Test
+  void slowSubscriberDoesNotBlockSampler() throws Exception {
+    var reg = mock(SamplerRegistry.class);
+    var ids = new AtomicInteger();
+    when(reg.watch(1L)).thenAnswer(inv -> "s" + ids.incrementAndGet());
+    var latch = new CountDownLatch(1);
+    var slow = new TestEmitter(latch);
+    var fast = new TestEmitter(null);
+    var c = standalone(reg, new ArrayBlockingQueue<>(2, false, List.of(slow, fast)));
+    try {
+      assertThat(c.stream(1L, false)).isSameAs(slow);
+      assertThat(c.stream(1L, false)).isSameAs(fast);
+
+      long start = System.nanoTime();
+      c.onSample(sample(1L));
+      c.onSample(sample(1L));
+      assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)).isLessThan(1000);
+
+      await("fast subscriber event", () -> fast.received("event:queues"));
+      assertThat(slow.sent).isEmpty();
+      latch.countDown();
+      await("slow subscriber event", () -> slow.received("event:queues"));
+      assertThat(fast.received("12345")).isTrue();
+    } finally {
+      latch.countDown();
+      c.shutdown();
+    }
+  }
+
+  @Test
+  void preDestroyCompletesEmittersAndUnwatches() throws Exception {
+    var reg = mock(SamplerRegistry.class);
+    when(reg.watch(1L)).thenReturn("p1");
+    var c = standalone(reg, new ArrayBlockingQueue<>(1));
+    c.stream(1L, false);
+    c.listStream();
+    String listWatcher = c.listWatcherIds().iterator().next();
+
+    c.shutdown();
+
+    verify(reg, times(1)).unwatch(1L, "p1");
+    verify(reg, times(1)).unwatchList(listWatcher);
+    assertThat(c.emittersFor(1L)).isEmpty();
+    assertThat(c.listEmitters()).isEmpty();
+  }
+
+  @Test
+  void concurrentOpenAndCloseNeverOrphansSubscription() throws Exception {
+    int n = 300;
+    var reg = mock(SamplerRegistry.class);
+    var ids = new AtomicInteger();
+    when(reg.watch(1L)).thenAnswer(inv -> "c" + ids.incrementAndGet());
+    var c = standalone(reg, new ArrayBlockingQueue<>(1));
+    ExecutorService closer = Executors.newSingleThreadExecutor();
+    try {
+      var live = (TestEmitter) c.stream(1L, false);
+      for (int i = 0; i < n; i++) {
+        TestEmitter old = live;
+        var go = new CountDownLatch(1);
+        Future<?> closing =
+            closer.submit(
+                () -> {
+                  go.await();
+                  old.fireCompletion();
+                  return null;
+                });
+        go.countDown();
+        live = (TestEmitter) c.stream(1L, false);
+        closing.get(5, TimeUnit.SECONDS);
+        assertThat(c.emittersFor(1L)).containsExactly(live);
+      }
+      verify(reg, times(n + 1)).watch(1L);
+      verify(reg, times(n)).unwatch(eq(1L), anyString());
+
+      TestEmitter last = live;
+      c.onSample(sample(1L));
+      await("live subscriber receives samples", () -> last.received("event:queues"));
+
+      last.fireCompletion();
+      assertThat(c.emittersFor(1L)).isEmpty();
+      verify(reg, times(n + 1)).unwatch(eq(1L), anyString());
+    } finally {
+      closer.shutdownNow();
+      c.shutdown();
+    }
   }
 }
