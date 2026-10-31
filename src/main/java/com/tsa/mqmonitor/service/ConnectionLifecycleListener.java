@@ -1,0 +1,6 @@
+package com.tsa.mqmonitor.service;
+
+/** Told when a connection stops being sampled for export: deleted, or Prometheus Export off. */
+public interface ConnectionLifecycleListener {
+  void connectionRemoved(long id);
+}

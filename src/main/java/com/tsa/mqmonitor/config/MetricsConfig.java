@@ -1,8 +1,8 @@
 package com.tsa.mqmonitor.config;
 
-import com.tsa.mqmonitor.connection.ConnectionService;
 import com.tsa.mqmonitor.metrics.MqMeterBinder;
-import com.tsa.mqmonitor.sampling.SamplerRegistry;
+import com.tsa.mqmonitor.service.ConnectionService;
+import com.tsa.mqmonitor.service.SamplerRegistry;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.config.MeterFilter;

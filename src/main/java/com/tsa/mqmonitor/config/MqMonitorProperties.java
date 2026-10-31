@@ -1,6 +1,6 @@
 package com.tsa.mqmonitor.config;
 
-import com.tsa.mqmonitor.mq.Redact;
+import com.tsa.mqmonitor.util.Redact;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.context.properties.ConfigurationProperties;

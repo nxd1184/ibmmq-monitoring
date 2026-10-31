@@ -1,15 +1,15 @@
 package com.tsa.mqmonitor.metrics;
 
-import com.tsa.mqmonitor.connection.MqConnection;
-import com.tsa.mqmonitor.health.HealthState;
-import com.tsa.mqmonitor.health.HealthVerdict;
-import com.tsa.mqmonitor.sampling.ConnectionLifecycleListener;
-import com.tsa.mqmonitor.sampling.EvaluatedSample;
-import com.tsa.mqmonitor.sampling.Sample;
-import com.tsa.mqmonitor.sampling.SampleListener;
+import com.tsa.mqmonitor.model.EvaluatedSample;
+import com.tsa.mqmonitor.model.HealthState;
+import com.tsa.mqmonitor.model.HealthVerdict;
+import com.tsa.mqmonitor.model.MqConnection;
+import com.tsa.mqmonitor.model.Sample;
+import com.tsa.mqmonitor.service.ConnectionLifecycleListener;
+import com.tsa.mqmonitor.service.SampleListener;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.MultiGauge;
 import io.micrometer.core.instrument.MultiGauge.Row;
+import io.micrometer.core.instrument.MultiGauge;
 import io.micrometer.core.instrument.Tags;
 import java.util.ArrayList;
 import java.util.HashMap;

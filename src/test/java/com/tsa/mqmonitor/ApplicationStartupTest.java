@@ -1,12 +1,12 @@
 package com.tsa.mqmonitor;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.tsa.mqmonitor.config.MqMonitorProperties;
 import com.tsa.mqmonitor.support.PostgresTestBase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class ApplicationStartupTest extends PostgresTestBase {
 

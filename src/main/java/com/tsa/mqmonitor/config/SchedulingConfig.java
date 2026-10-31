@@ -1,6 +1,6 @@
 package com.tsa.mqmonitor.config;
 
-import com.tsa.mqmonitor.health.HealthEvaluator;
+import com.tsa.mqmonitor.service.HealthEvaluator;
 import java.time.Clock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
