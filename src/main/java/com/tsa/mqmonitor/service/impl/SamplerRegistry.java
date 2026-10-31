@@ -65,7 +65,8 @@ public class SamplerRegistry {
 
   private static final class Entry {
     final Set<String> watchers = new HashSet<>();
-    MqConnection connection;
+    /** Replaced under the lock; read without it by isStale() and the Prometheus refresh. */
+    volatile MqConnection connection;
     volatile Sampler sampler;
     ScheduledFuture<?> periodic;
     ScheduledFuture<?> pendingStop;

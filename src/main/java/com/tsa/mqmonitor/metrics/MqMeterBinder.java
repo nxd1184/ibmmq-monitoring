@@ -50,8 +50,9 @@ public class MqMeterBinder implements SampleListener, ConnectionLifecycleListene
     METRICS.forEach(name -> gauges.put(name, MultiGauge.builder(name).register(meterRegistry)));
   }
 
+  /** The lookup and the row building run outside the lock so a slow database never stalls samplers. */
   @Override
-  public synchronized void onSample(EvaluatedSample evaluated) {
+  public void onSample(EvaluatedSample evaluated) {
     Sample sample = evaluated.sample();
     long id = sample.connectionId();
     Optional<MqConnection> found = connectionLookup.apply(id);
@@ -59,7 +60,11 @@ public class MqMeterBinder implements SampleListener, ConnectionLifecycleListene
       removeRows(id);
       return;
     }
-    MqConnection conn = found.get();
+    replaceRows(id, rows(evaluated, found.get()));
+  }
+
+  private static Map<String, List<Row<?>>> rows(EvaluatedSample evaluated, MqConnection conn) {
+    Sample sample = evaluated.sample();
     String qmgr =
         sample.qmgr() != null && sample.qmgr().name() != null
             ? sample.qmgr().name()
@@ -86,16 +91,20 @@ public class MqMeterBinder implements SampleListener, ConnectionLifecycleListene
       evaluated.queues().forEach((n, v) -> addHealth(rows, base, "queue", n, v));
       evaluated.channels().forEach((n, v) -> addHealth(rows, base, "channel", n, v));
     }
+    return rows;
+  }
+
+  private synchronized void replaceRows(long id, Map<String, List<Row<?>>> rows) {
     rowsByConnection.put(id, rows);
     publish();
   }
 
   @Override
-  public synchronized void connectionRemoved(long id) {
+  public void connectionRemoved(long id) {
     removeRows(id);
   }
 
-  private void removeRows(long id) {
+  private synchronized void removeRows(long id) {
     if (rowsByConnection.remove(id) != null) {
       publish();
     }
