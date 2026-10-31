@@ -10,9 +10,9 @@ import static org.mockito.Mockito.when;
 
 import com.tsa.mqmonitor.client.MqGateway;
 import com.tsa.mqmonitor.client.MqGatewayFactory;
-import com.tsa.mqmonitor.dto.ConnectionForm;
 import com.tsa.mqmonitor.exception.MqUnreachableException;
 import com.tsa.mqmonitor.model.ClientType;
+import com.tsa.mqmonitor.model.ConnectionForm;
 import com.tsa.mqmonitor.model.QueueManagerInfo;
 import com.tsa.mqmonitor.model.Thresholds;
 import com.tsa.mqmonitor.model.TlsMode;

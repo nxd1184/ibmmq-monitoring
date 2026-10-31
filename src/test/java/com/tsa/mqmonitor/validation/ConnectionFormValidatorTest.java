@@ -3,7 +3,7 @@ package com.tsa.mqmonitor.validation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tsa.mqmonitor.config.MqMonitorProperties;
-import com.tsa.mqmonitor.dto.ConnectionForm;
+import com.tsa.mqmonitor.model.ConnectionForm;
 import com.tsa.mqmonitor.model.TlsMode;
 import org.junit.jupiter.api.Test;
 import org.springframework.validation.BeanPropertyBindingResult;

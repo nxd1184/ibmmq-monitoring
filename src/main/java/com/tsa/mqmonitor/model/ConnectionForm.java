@@ -1,4 +1,4 @@
-package com.tsa.mqmonitor.dto;
+package com.tsa.mqmonitor.model;
 
 import com.tsa.mqmonitor.model.ClientType;
 import com.tsa.mqmonitor.model.TlsMode;

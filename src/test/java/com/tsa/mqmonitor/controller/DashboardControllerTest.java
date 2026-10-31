@@ -10,8 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.tsa.mqmonitor.dto.ConnectionForm;
 import com.tsa.mqmonitor.model.ClientType;
+import com.tsa.mqmonitor.model.ConnectionForm;
 import com.tsa.mqmonitor.model.TlsMode;
 import com.tsa.mqmonitor.repository.MqConnectionRepository;
 import com.tsa.mqmonitor.service.ConnectionService;

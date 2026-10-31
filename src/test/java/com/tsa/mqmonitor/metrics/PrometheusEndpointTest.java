@@ -9,8 +9,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.tsa.mqmonitor.client.MqGateway;
 import com.tsa.mqmonitor.client.MqGatewayFactory;
-import com.tsa.mqmonitor.dto.ConnectionForm;
 import com.tsa.mqmonitor.model.ClientType;
+import com.tsa.mqmonitor.model.ConnectionForm;
 import com.tsa.mqmonitor.model.EvaluatedSample;
 import com.tsa.mqmonitor.model.HealthVerdict;
 import com.tsa.mqmonitor.model.QueueInfo;

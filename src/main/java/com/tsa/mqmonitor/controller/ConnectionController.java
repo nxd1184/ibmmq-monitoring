@@ -1,8 +1,8 @@
 package com.tsa.mqmonitor.controller;
 
 import com.tsa.mqmonitor.config.MqMonitorProperties;
-import com.tsa.mqmonitor.dto.ConnectionForm;
 import com.tsa.mqmonitor.model.ClientType;
+import com.tsa.mqmonitor.model.ConnectionForm;
 import com.tsa.mqmonitor.model.ConnectionTestResult;
 import com.tsa.mqmonitor.model.MqConnection;
 import com.tsa.mqmonitor.model.TlsMode;

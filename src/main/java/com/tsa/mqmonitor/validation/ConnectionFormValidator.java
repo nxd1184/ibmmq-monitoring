@@ -1,7 +1,7 @@
 package com.tsa.mqmonitor.validation;
 
 import com.tsa.mqmonitor.config.MqMonitorProperties;
-import com.tsa.mqmonitor.dto.ConnectionForm;
+import com.tsa.mqmonitor.model.ConnectionForm;
 import com.tsa.mqmonitor.model.TlsMode;
 import com.tsa.mqmonitor.service.ConnectionService;
 import org.springframework.beans.factory.annotation.Autowired;
