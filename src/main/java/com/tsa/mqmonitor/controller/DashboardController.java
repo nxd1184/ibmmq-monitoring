@@ -2,8 +2,8 @@ package com.tsa.mqmonitor.controller;
 
 import com.tsa.mqmonitor.model.EvaluatedSample;
 import com.tsa.mqmonitor.model.MqConnection;
-import com.tsa.mqmonitor.service.ConnectionService;
-import com.tsa.mqmonitor.service.SamplerRegistry;
+import com.tsa.mqmonitor.service.impl.ConnectionService;
+import com.tsa.mqmonitor.service.impl.SamplerRegistry;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;

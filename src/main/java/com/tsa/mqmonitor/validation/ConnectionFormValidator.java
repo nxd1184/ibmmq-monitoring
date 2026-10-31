@@ -3,7 +3,7 @@ package com.tsa.mqmonitor.validation;
 import com.tsa.mqmonitor.config.MqMonitorProperties;
 import com.tsa.mqmonitor.enumerable.TlsMode;
 import com.tsa.mqmonitor.model.ConnectionForm;
-import com.tsa.mqmonitor.service.ConnectionService;
+import com.tsa.mqmonitor.service.impl.ConnectionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;

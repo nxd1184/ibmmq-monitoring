@@ -1,6 +1,7 @@
 package com.tsa.mqmonitor.service;
 
 import com.tsa.mqmonitor.model.EvaluatedSample;
+import com.tsa.mqmonitor.service.impl.SamplerRegistry;
 
 public interface SampleListener {
   void onSample(EvaluatedSample sample);

@@ -22,6 +22,11 @@ public abstract class PostgresTestBase {
         postgres.start();
     }
 
+    /** For tests that boot the application by hand instead of through this base class. */
+    public static PostgreSQLContainer postgres() {
+        return postgres;
+    }
+
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);

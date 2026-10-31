@@ -18,8 +18,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.tsa.mqmonitor.client.MqGateway;
-import com.tsa.mqmonitor.client.MqGatewayFactory;
 import com.tsa.mqmonitor.enumerable.HealthReason;
 import com.tsa.mqmonitor.exception.MqUnreachableException;
 import com.tsa.mqmonitor.model.ConnectionForm;
@@ -27,8 +25,10 @@ import com.tsa.mqmonitor.model.EvaluatedSample;
 import com.tsa.mqmonitor.model.HealthVerdict;
 import com.tsa.mqmonitor.model.QueueManagerInfo;
 import com.tsa.mqmonitor.repository.MqConnectionRepository;
-import com.tsa.mqmonitor.service.ConnectionService;
-import com.tsa.mqmonitor.service.SamplerRegistry;
+import com.tsa.mqmonitor.service.MqGateway;
+import com.tsa.mqmonitor.service.MqGatewayFactory;
+import com.tsa.mqmonitor.service.impl.ConnectionService;
+import com.tsa.mqmonitor.service.impl.SamplerRegistry;
 import com.tsa.mqmonitor.support.PostgresTestBase;
 import java.util.Map;
 import java.util.Optional;
