@@ -3,8 +3,8 @@ package com.tsa.mqmonitor.client;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import com.tsa.mqmonitor.exception.MqGatewayException;
-import com.tsa.mqmonitor.model.TlsMode;
 import com.tsa.mqmonitor.model.TlsSettings;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeAll;

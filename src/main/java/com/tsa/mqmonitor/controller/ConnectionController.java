@@ -1,11 +1,11 @@
 package com.tsa.mqmonitor.controller;
 
 import com.tsa.mqmonitor.config.MqMonitorProperties;
-import com.tsa.mqmonitor.model.ClientType;
+import com.tsa.mqmonitor.enumerable.ClientType;
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import com.tsa.mqmonitor.model.ConnectionForm;
 import com.tsa.mqmonitor.model.ConnectionTestResult;
 import com.tsa.mqmonitor.model.MqConnection;
-import com.tsa.mqmonitor.model.TlsMode;
 import com.tsa.mqmonitor.service.ConnectionService;
 import com.tsa.mqmonitor.service.SamplerRegistry;
 import com.tsa.mqmonitor.validation.ConnectionFormValidator;

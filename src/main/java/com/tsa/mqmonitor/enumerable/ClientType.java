@@ -1,3 +1,3 @@
-package com.tsa.mqmonitor.model;
+package com.tsa.mqmonitor.enumerable;
 
 public enum ClientType { NATIVE, SPRING_JMS }

@@ -1,5 +1,6 @@
 package com.tsa.mqmonitor.model;
 
+import com.tsa.mqmonitor.enumerable.ClientType;
 import com.tsa.mqmonitor.util.Redact;
 import java.time.Duration;
 

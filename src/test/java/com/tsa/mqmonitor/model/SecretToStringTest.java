@@ -3,6 +3,8 @@ package com.tsa.mqmonitor.model;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tsa.mqmonitor.config.MqMonitorProperties;
+import com.tsa.mqmonitor.enumerable.ClientType;
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 

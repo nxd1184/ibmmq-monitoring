@@ -1,4 +1,4 @@
-package com.tsa.mqmonitor.model;
+package com.tsa.mqmonitor.enumerable;
 
 /** Bounded cause of a verdict; safe to use as a metric label. */
 public enum HealthReason {

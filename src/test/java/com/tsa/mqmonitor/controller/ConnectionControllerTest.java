@@ -20,10 +20,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.tsa.mqmonitor.client.MqGateway;
 import com.tsa.mqmonitor.client.MqGatewayFactory;
+import com.tsa.mqmonitor.enumerable.HealthReason;
 import com.tsa.mqmonitor.exception.MqUnreachableException;
 import com.tsa.mqmonitor.model.ConnectionForm;
 import com.tsa.mqmonitor.model.EvaluatedSample;
-import com.tsa.mqmonitor.model.HealthReason;
 import com.tsa.mqmonitor.model.HealthVerdict;
 import com.tsa.mqmonitor.model.QueueManagerInfo;
 import com.tsa.mqmonitor.repository.MqConnectionRepository;

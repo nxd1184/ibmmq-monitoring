@@ -10,12 +10,12 @@ import static org.mockito.Mockito.when;
 
 import com.tsa.mqmonitor.client.MqGateway;
 import com.tsa.mqmonitor.client.MqGatewayFactory;
+import com.tsa.mqmonitor.enumerable.ClientType;
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import com.tsa.mqmonitor.exception.MqUnreachableException;
-import com.tsa.mqmonitor.model.ClientType;
 import com.tsa.mqmonitor.model.ConnectionForm;
 import com.tsa.mqmonitor.model.QueueManagerInfo;
 import com.tsa.mqmonitor.model.Thresholds;
-import com.tsa.mqmonitor.model.TlsMode;
 import com.tsa.mqmonitor.repository.MqConnectionRepository;
 import com.tsa.mqmonitor.security.SecretCipher;
 import com.tsa.mqmonitor.support.PostgresTestBase;

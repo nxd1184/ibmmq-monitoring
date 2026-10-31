@@ -1,7 +1,7 @@
 package com.tsa.mqmonitor.metrics;
 
+import com.tsa.mqmonitor.enumerable.HealthState;
 import com.tsa.mqmonitor.model.EvaluatedSample;
-import com.tsa.mqmonitor.model.HealthState;
 import com.tsa.mqmonitor.model.HealthVerdict;
 import com.tsa.mqmonitor.model.MqConnection;
 import com.tsa.mqmonitor.model.Sample;

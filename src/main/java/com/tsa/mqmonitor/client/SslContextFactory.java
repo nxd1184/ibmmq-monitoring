@@ -1,7 +1,7 @@
 package com.tsa.mqmonitor.client;
 
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import com.tsa.mqmonitor.exception.MqGatewayException;
-import com.tsa.mqmonitor.model.TlsMode;
 import com.tsa.mqmonitor.model.TlsSettings;
 import java.io.IOException;
 import java.io.InputStream;

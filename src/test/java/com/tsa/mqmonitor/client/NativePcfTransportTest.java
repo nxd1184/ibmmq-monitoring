@@ -3,9 +3,9 @@ package com.tsa.mqmonitor.client;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ibm.mq.constants.MQConstants;
-import com.tsa.mqmonitor.model.ClientType;
+import com.tsa.mqmonitor.enumerable.ClientType;
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import com.tsa.mqmonitor.model.MqTarget;
-import com.tsa.mqmonitor.model.TlsMode;
 import com.tsa.mqmonitor.model.TlsSettings;
 import java.time.Duration;
 import javax.net.ssl.SSLSocketFactory;

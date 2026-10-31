@@ -1,9 +1,9 @@
 package com.tsa.mqmonitor.service;
 
+import com.tsa.mqmonitor.enumerable.HealthReason;
+import com.tsa.mqmonitor.enumerable.HealthState;
 import com.tsa.mqmonitor.model.ChannelInfo;
 import com.tsa.mqmonitor.model.EvaluatedSample;
-import com.tsa.mqmonitor.model.HealthReason;
-import com.tsa.mqmonitor.model.HealthState;
 import com.tsa.mqmonitor.model.HealthVerdict;
 import com.tsa.mqmonitor.model.QueueInfo;
 import com.tsa.mqmonitor.model.Sample;

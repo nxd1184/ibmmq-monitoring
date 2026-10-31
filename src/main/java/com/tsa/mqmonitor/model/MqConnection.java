@@ -1,5 +1,7 @@
 package com.tsa.mqmonitor.model;
 
+import com.tsa.mqmonitor.enumerable.ClientType;
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import java.time.Instant;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;

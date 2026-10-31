@@ -1,7 +1,7 @@
 package com.tsa.mqmonitor.model;
 
-import com.tsa.mqmonitor.model.ClientType;
-import com.tsa.mqmonitor.model.TlsMode;
+import com.tsa.mqmonitor.enumerable.ClientType;
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;

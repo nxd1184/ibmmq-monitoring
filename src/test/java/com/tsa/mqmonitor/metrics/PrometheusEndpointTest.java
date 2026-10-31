@@ -9,14 +9,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.tsa.mqmonitor.client.MqGateway;
 import com.tsa.mqmonitor.client.MqGatewayFactory;
-import com.tsa.mqmonitor.model.ClientType;
+import com.tsa.mqmonitor.enumerable.ClientType;
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import com.tsa.mqmonitor.model.ConnectionForm;
 import com.tsa.mqmonitor.model.EvaluatedSample;
 import com.tsa.mqmonitor.model.HealthVerdict;
 import com.tsa.mqmonitor.model.QueueInfo;
 import com.tsa.mqmonitor.model.QueueManagerInfo;
 import com.tsa.mqmonitor.model.Sample;
-import com.tsa.mqmonitor.model.TlsMode;
 import com.tsa.mqmonitor.repository.MqConnectionRepository;
 import com.tsa.mqmonitor.service.ConnectionService;
 import com.tsa.mqmonitor.support.PostgresTestBase;

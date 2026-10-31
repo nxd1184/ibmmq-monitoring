@@ -1,5 +1,6 @@
 package com.tsa.mqmonitor.model;
 
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import com.tsa.mqmonitor.util.Redact;
 
 public record TlsSettings(

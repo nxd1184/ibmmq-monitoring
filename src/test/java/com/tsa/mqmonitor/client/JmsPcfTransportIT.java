@@ -3,13 +3,13 @@ package com.tsa.mqmonitor.client;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.tsa.mqmonitor.enumerable.ClientType;
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import com.tsa.mqmonitor.exception.MqGatewayException;
 import com.tsa.mqmonitor.exception.MqUnreachableException;
 import com.tsa.mqmonitor.model.ChannelInfo;
-import com.tsa.mqmonitor.model.ClientType;
 import com.tsa.mqmonitor.model.MqTarget;
 import com.tsa.mqmonitor.model.QueueInfo;
-import com.tsa.mqmonitor.model.TlsMode;
 import com.tsa.mqmonitor.model.TlsSettings;
 import com.tsa.mqmonitor.support.MqContainer;
 import java.time.Duration;

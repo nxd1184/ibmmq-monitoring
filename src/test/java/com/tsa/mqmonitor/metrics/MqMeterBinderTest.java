@@ -2,16 +2,16 @@ package com.tsa.mqmonitor.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tsa.mqmonitor.enumerable.ClientType;
+import com.tsa.mqmonitor.enumerable.HealthReason;
+import com.tsa.mqmonitor.enumerable.TlsMode;
 import com.tsa.mqmonitor.model.ChannelInfo;
-import com.tsa.mqmonitor.model.ClientType;
 import com.tsa.mqmonitor.model.EvaluatedSample;
-import com.tsa.mqmonitor.model.HealthReason;
 import com.tsa.mqmonitor.model.HealthVerdict;
 import com.tsa.mqmonitor.model.MqConnection;
 import com.tsa.mqmonitor.model.QueueInfo;
 import com.tsa.mqmonitor.model.QueueManagerInfo;
 import com.tsa.mqmonitor.model.Sample;
-import com.tsa.mqmonitor.model.TlsMode;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.HashMap;
