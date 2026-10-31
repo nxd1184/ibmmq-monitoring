@@ -29,7 +29,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.TaskScheduler;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 /**
  * Owns every sampler. A connection is sampled only while a browser watches it or while it has
@@ -40,7 +40,7 @@ import org.springframework.stereotype.Component;
  * gateway released afterwards; a sampler the registry discards is retired and never touches MQ
  * again. List-only samplers live in their own map and never create registry entries.
  */
-@Component
+@Service
 public class SamplerRegistry {
   private static final Logger log = LoggerFactory.getLogger(SamplerRegistry.class);
 

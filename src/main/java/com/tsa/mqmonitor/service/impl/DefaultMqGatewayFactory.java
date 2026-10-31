@@ -5,9 +5,9 @@ import com.tsa.mqmonitor.model.MqTarget;
 import com.tsa.mqmonitor.service.MqGateway;
 import com.tsa.mqmonitor.service.MqGatewayFactory;
 import java.time.Duration;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
-@Component
+@Service
 public class DefaultMqGatewayFactory implements MqGatewayFactory {
   private final Duration defaultConnectTimeout;
 
