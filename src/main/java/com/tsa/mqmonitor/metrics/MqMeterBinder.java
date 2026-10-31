@@ -45,9 +45,9 @@ public class MqMeterBinder implements SampleListener, ConnectionLifecycleListene
   private final Map<Long, Map<String, List<Row<?>>>> rowsByConnection = new LinkedHashMap<>();
 
   public MqMeterBinder(
-      MeterRegistry registry, Function<Long, Optional<MqConnection>> connectionLookup) {
+      MeterRegistry meterRegistry, Function<Long, Optional<MqConnection>> connectionLookup) {
     this.connectionLookup = connectionLookup;
-    METRICS.forEach(name -> gauges.put(name, MultiGauge.builder(name).register(registry)));
+    METRICS.forEach(name -> gauges.put(name, MultiGauge.builder(name).register(meterRegistry)));
   }
 
   @Override

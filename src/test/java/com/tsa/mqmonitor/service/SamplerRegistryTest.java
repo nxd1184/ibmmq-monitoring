@@ -35,12 +35,12 @@ class SamplerRegistryTest {
   static final Instant T0 = Instant.parse("2026-10-30T10:00:00Z");
 
   MutableClock clock = new MutableClock(T0);
-  RecordingTaskScheduler scheduler = new RecordingTaskScheduler(clock);
-  ConnectionService service = mock(ConnectionService.class);
-  MqGatewayFactory factory = mock(MqGatewayFactory.class);
-  MqGateway gw = mock(MqGateway.class);
+  RecordingTaskScheduler recordingTaskScheduler = new RecordingTaskScheduler(clock);
+  ConnectionService connectionService = mock(ConnectionService.class);
+  MqGatewayFactory mqGatewayFactory = mock(MqGatewayFactory.class);
+  MqGateway mqGateway = mock(MqGateway.class);
   Map<Long, MqConnection> connections = new TreeMap<>();
-  SamplerRegistry reg;
+  SamplerRegistry samplerRegistry;
 
   static MqConnection connection(long id, int intervalSeconds, boolean export) {
     return new MqConnection(
@@ -59,18 +59,18 @@ class SamplerRegistryTest {
   void setUp() {
     connections.put(1L, connection(1, 5, false));
     connections.put(2L, connection(2, 10, false));
-    when(service.findById(anyLong()))
+    when(connectionService.findById(anyLong()))
         .thenAnswer(inv -> Optional.ofNullable(connections.get(inv.<Long>getArgument(0))));
-    when(service.findAll()).thenAnswer(inv -> List.copyOf(connections.values()));
-    when(service.findPrometheusExports())
+    when(connectionService.findAll()).thenAnswer(inv -> List.copyOf(connections.values()));
+    when(connectionService.findPrometheusExports())
         .thenAnswer(
             inv -> connections.values().stream().filter(MqConnection::prometheusExport).toList());
-    when(service.targetFor(any(MqConnection.class))).thenReturn(mock(MqTarget.class));
-    when(service.thresholdsFor(any())).thenReturn(new Thresholds(null, 80, 60, null));
-    when(factory.open(any())).thenReturn(gw);
-    when(gw.inquireQueueManager()).thenReturn(new QueueManagerInfo("QM", "RUNNING", 940, "UNIX"));
-    when(gw.inquireQueues(any(), anyBoolean())).thenReturn(List.of());
-    when(gw.inquireChannels()).thenReturn(List.of());
+    when(connectionService.targetFor(any(MqConnection.class))).thenReturn(mock(MqTarget.class));
+    when(connectionService.thresholdsFor(any())).thenReturn(new Thresholds(null, 80, 60, null));
+    when(mqGatewayFactory.open(any())).thenReturn(mqGateway);
+    when(mqGateway.inquireQueueManager()).thenReturn(new QueueManagerInfo("QM", "RUNNING", 940, "UNIX"));
+    when(mqGateway.inquireQueues(any(), anyBoolean())).thenReturn(List.of());
+    when(mqGateway.inquireChannels()).thenReturn(List.of());
     var props =
         new MqMonitorProperties(
             null,
@@ -79,269 +79,269 @@ class SamplerRegistryTest {
             new MqMonitorProperties.Sampling(30, 30),
             new MqMonitorProperties.Thresholds(null, 80, 60, null),
             new MqMonitorProperties.Mq(10));
-    reg = new SamplerRegistry(service, factory, new HealthEvaluator(), scheduler, clock, props);
+    samplerRegistry = new SamplerRegistry(connectionService, mqGatewayFactory, new HealthEvaluator(), recordingTaskScheduler, clock, props);
   }
 
   @Test
   void watchStartsSamplingAtConnectionInterval() {
-    reg.watch(1);
-    assertThat(scheduler.periodicTasks()).hasSize(1);
-    assertThat(scheduler.period(0)).isEqualTo(Duration.ofSeconds(5));
+    samplerRegistry.watch(1);
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
+    assertThat(recordingTaskScheduler.period(0)).isEqualTo(Duration.ofSeconds(5));
   }
 
   @Test
   void secondWatcherDoesNotStartSecondSampler() {
-    reg.watch(1);
-    reg.watch(1);
-    assertThat(scheduler.periodicTasks()).hasSize(1);
+    samplerRegistry.watch(1);
+    samplerRegistry.watch(1);
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
   }
 
   @Test
   void samplerStopsGraceAfterLastWatcherLeaves() {
-    var w = reg.watch(1);
-    reg.unwatch(1, w);
-    assertThat(scheduler.periodicTasks()).hasSize(1);
-    scheduler.advance(Duration.ofSeconds(30));
-    assertThat(scheduler.periodicTasks()).isEmpty();
+    var w = samplerRegistry.watch(1);
+    samplerRegistry.unwatch(1, w);
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
+    recordingTaskScheduler.advance(Duration.ofSeconds(30));
+    assertThat(recordingTaskScheduler.periodicTasks()).isEmpty();
   }
 
   @Test
   void watcherReturningWithinGraceCancelsStop() {
-    var w = reg.watch(1);
-    reg.unwatch(1, w);
-    scheduler.advance(Duration.ofSeconds(29));
-    reg.watch(1);
-    scheduler.advance(Duration.ofSeconds(5));
-    assertThat(scheduler.periodicTasks()).hasSize(1);
+    var w = samplerRegistry.watch(1);
+    samplerRegistry.unwatch(1, w);
+    recordingTaskScheduler.advance(Duration.ofSeconds(29));
+    samplerRegistry.watch(1);
+    recordingTaskScheduler.advance(Duration.ofSeconds(5));
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
   }
 
   @Test
   void prometheusExportSamplesWithoutWatchers() {
     exportOn(2);
-    reg.refreshPrometheusExports();
-    assertThat(scheduler.periodicTasks()).hasSize(1);
+    samplerRegistry.refreshPrometheusExports();
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
   }
 
   @Test
   void prometheusExportIgnoresUnwatch() {
     exportOn(2);
-    reg.refreshPrometheusExports();
-    var w = reg.watch(2);
-    reg.unwatch(2, w);
-    scheduler.advance(Duration.ofMinutes(5));
-    assertThat(scheduler.periodicTasks()).hasSize(1);
+    samplerRegistry.refreshPrometheusExports();
+    var w = samplerRegistry.watch(2);
+    samplerRegistry.unwatch(2, w);
+    recordingTaskScheduler.advance(Duration.ofMinutes(5));
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
   }
 
   @Test
   void listWatchSamplesQmgrOnlyAtListInterval() {
-    reg.watchList("w");
-    scheduler.fireAll();
-    verify(gw, atLeastOnce()).inquireQueueManager();
-    verify(gw, never()).inquireQueues(any(), anyBoolean());
-    assertThat(scheduler.period(0)).isEqualTo(Duration.ofSeconds(30));
+    samplerRegistry.watchList("w");
+    recordingTaskScheduler.fireAll();
+    verify(mqGateway, atLeastOnce()).inquireQueueManager();
+    verify(mqGateway, never()).inquireQueues(any(), anyBoolean());
+    assertThat(recordingTaskScheduler.period(0)).isEqualTo(Duration.ofSeconds(30));
   }
 
   @Test
   void latestIsEmptyBeforeFirstSample() {
-    assertThat(reg.latest(1)).isEmpty();
+    assertThat(samplerRegistry.latest(1)).isEmpty();
   }
 
   @Test
   void connectionDeletedStopsSampler() {
-    reg.watch(1);
-    reg.connectionDeleted(1);
-    assertThat(scheduler.periodicTasks()).isEmpty();
+    samplerRegistry.watch(1);
+    samplerRegistry.connectionDeleted(1);
+    assertThat(recordingTaskScheduler.periodicTasks()).isEmpty();
   }
 
   @Test
   void listWatchSkipsConnectionsWithFullSampler() {
-    reg.watch(1);
-    reg.watchList("w");
-    scheduler.fireAll();
-    verify(gw, times(1)).inquireQueues(any(), anyBoolean());
-    verify(gw, times(2)).inquireQueueManager();
+    samplerRegistry.watch(1);
+    samplerRegistry.watchList("w");
+    recordingTaskScheduler.fireAll();
+    verify(mqGateway, times(1)).inquireQueues(any(), anyBoolean());
+    verify(mqGateway, times(2)).inquireQueueManager();
   }
 
   @Test
   void listStopsWhenLastListWatcherLeaves() {
-    reg.watchList("a");
-    reg.watchList("b");
-    assertThat(scheduler.periodicTasks()).hasSize(1);
-    reg.unwatchList("a");
-    assertThat(scheduler.periodicTasks()).hasSize(1);
-    reg.unwatchList("b");
-    assertThat(scheduler.periodicTasks()).isEmpty();
+    samplerRegistry.watchList("a");
+    samplerRegistry.watchList("b");
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
+    samplerRegistry.unwatchList("a");
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
+    samplerRegistry.unwatchList("b");
+    assertThat(recordingTaskScheduler.periodicTasks()).isEmpty();
   }
 
   @Test
   void connectionChangedRestartsAtNewInterval() {
-    reg.watch(1);
+    samplerRegistry.watch(1);
     connections.put(1L, connection(1, 20, false));
-    reg.connectionChanged(1);
-    assertThat(scheduler.periodicTasks()).hasSize(1);
-    assertThat(scheduler.period(0)).isEqualTo(Duration.ofSeconds(20));
+    samplerRegistry.connectionChanged(1);
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
+    assertThat(recordingTaskScheduler.period(0)).isEqualTo(Duration.ofSeconds(20));
   }
 
   @Test
   void connectionChangedWithoutEntryStartsOnlyWhenExportOn() {
-    reg.connectionChanged(1);
-    assertThat(scheduler.periodicTasks()).isEmpty();
+    samplerRegistry.connectionChanged(1);
+    assertThat(recordingTaskScheduler.periodicTasks()).isEmpty();
     exportOn(1);
-    reg.connectionChanged(1);
-    assertThat(scheduler.periodicTasks()).hasSize(1);
+    samplerRegistry.connectionChanged(1);
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
   }
 
   @Test
   void exportTurnedOffStopsAfterGraceWhenUnwatched() {
     exportOn(2);
-    reg.refreshPrometheusExports();
+    samplerRegistry.refreshPrometheusExports();
     connections.put(2L, connection(2, 10, false));
-    reg.connectionChanged(2);
-    assertThat(scheduler.periodicTasks()).hasSize(1);
-    scheduler.advance(Duration.ofSeconds(30));
-    assertThat(scheduler.periodicTasks()).isEmpty();
+    samplerRegistry.connectionChanged(2);
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
+    recordingTaskScheduler.advance(Duration.ofSeconds(30));
+    assertThat(recordingTaskScheduler.periodicTasks()).isEmpty();
   }
 
   @Test
   void refreshStopsSamplerThatNoLongerExports() {
     exportOn(2);
-    reg.refreshPrometheusExports();
+    samplerRegistry.refreshPrometheusExports();
     connections.put(2L, connection(2, 10, false));
-    reg.refreshPrometheusExports();
-    assertThat(scheduler.periodicTasks()).isEmpty();
+    samplerRegistry.refreshPrometheusExports();
+    assertThat(recordingTaskScheduler.periodicTasks()).isEmpty();
   }
 
   @Test
   void stopClosesGatewayButKeepsLatest() {
-    var w = reg.watch(1);
-    scheduler.advance(Duration.ofSeconds(1));
-    reg.unwatch(1, w);
-    scheduler.advance(Duration.ofSeconds(30));
-    verify(gw, timeout(2000)).close();
-    assertThat(reg.latest(1)).isPresent();
+    var w = samplerRegistry.watch(1);
+    recordingTaskScheduler.advance(Duration.ofSeconds(1));
+    samplerRegistry.unwatch(1, w);
+    recordingTaskScheduler.advance(Duration.ofSeconds(30));
+    verify(mqGateway, timeout(2000)).close();
+    assertThat(samplerRegistry.latest(1)).isPresent();
   }
 
   @Test
   void graceStopThenWatchReopensOnce() {
-    var w = reg.watch(1);
-    scheduler.advance(Duration.ofSeconds(1));
-    reg.unwatch(1, w);
-    scheduler.advance(Duration.ofSeconds(30));
-    verify(gw, timeout(2000).times(1)).close();
-    reg.watch(1);
-    scheduler.advance(Duration.ofSeconds(11));
-    verify(factory, times(2)).open(any());
-    assertThat(scheduler.periodicTasks()).hasSize(1);
+    var w = samplerRegistry.watch(1);
+    recordingTaskScheduler.advance(Duration.ofSeconds(1));
+    samplerRegistry.unwatch(1, w);
+    recordingTaskScheduler.advance(Duration.ofSeconds(30));
+    verify(mqGateway, timeout(2000).times(1)).close();
+    samplerRegistry.watch(1);
+    recordingTaskScheduler.advance(Duration.ofSeconds(11));
+    verify(mqGatewayFactory, times(2)).open(any());
+    assertThat(recordingTaskScheduler.periodicTasks()).hasSize(1);
   }
 
   @Test
   void runStartedBeforeStopDoesNotReopenGateway() {
-    var w = reg.watch(1);
-    Runnable lateRun = scheduler.periodicTasks().get(0).runnable;
-    scheduler.advance(Duration.ofSeconds(1));
-    reg.unwatch(1, w);
-    scheduler.advance(Duration.ofSeconds(30));
+    var w = samplerRegistry.watch(1);
+    Runnable lateRun = recordingTaskScheduler.periodicTasks().get(0).runnable;
+    recordingTaskScheduler.advance(Duration.ofSeconds(1));
+    samplerRegistry.unwatch(1, w);
+    recordingTaskScheduler.advance(Duration.ofSeconds(30));
     lateRun.run();
-    verify(factory, times(1)).open(any());
-    verify(gw, timeout(2000).times(1)).close();
+    verify(mqGatewayFactory, times(1)).open(any());
+    verify(mqGateway, timeout(2000).times(1)).close();
   }
 
   @Test
   void listPathRetiresSamplerReplacedDuringRun() {
     var swapped = new AtomicBoolean();
-    when(gw.inquireQueueManager())
+    when(mqGateway.inquireQueueManager())
         .thenAnswer(
             inv -> {
               if (swapped.compareAndSet(false, true)) {
                 connections.put(2L, connection(2, 15, false));
-                reg.connectionChanged(2);
+                samplerRegistry.connectionChanged(2);
               }
               return new QueueManagerInfo("QM", "RUNNING", 940, "UNIX");
             });
-    reg.watchList("w");
-    scheduler.fireAll();
-    verify(factory, times(1)).open(any());
-    assertThat(reg.latest(2)).isEmpty();
-    reg.unwatchList("w");
-    verify(gw, timeout(2000).times(1)).close();
+    samplerRegistry.watchList("w");
+    recordingTaskScheduler.fireAll();
+    verify(mqGatewayFactory, times(1)).open(any());
+    assertThat(samplerRegistry.latest(2)).isEmpty();
+    samplerRegistry.unwatchList("w");
+    verify(mqGateway, timeout(2000).times(1)).close();
   }
 
   @Test
   void listRunDoesNotResurrectDeletedConnection() {
-    when(service.findAll())
+    when(connectionService.findAll())
         .thenAnswer(
             inv -> {
               var snapshot = List.copyOf(connections.values());
               connections.remove(2L);
-              reg.connectionDeleted(2);
+              samplerRegistry.connectionDeleted(2);
               return snapshot;
             });
-    reg.watchList("w");
-    scheduler.fireAll();
-    assertThat(reg.latest(2)).isEmpty();
-    assertThat(reg.latest(1)).isPresent();
-    verify(factory, times(1)).open(any());
-    verify(service, times(1)).targetFor(any(MqConnection.class));
+    samplerRegistry.watchList("w");
+    recordingTaskScheduler.fireAll();
+    assertThat(samplerRegistry.latest(2)).isEmpty();
+    assertThat(samplerRegistry.latest(1)).isPresent();
+    verify(mqGatewayFactory, times(1)).open(any());
+    verify(connectionService, times(1)).targetFor(any(MqConnection.class));
   }
 
   @Test
   void connectionDeletedNotifiesLifecycleListeners() {
     var removed = new java.util.ArrayList<Long>();
-    reg.addLifecycleListener(removed::add);
+    samplerRegistry.addLifecycleListener(removed::add);
     connections.remove(1L);
-    reg.connectionDeleted(1);
+    samplerRegistry.connectionDeleted(1);
     assertThat(removed).containsExactly(1L);
   }
 
   @Test
   void exportTurnedOffNotifiesLifecycleListeners() {
     var removed = new java.util.ArrayList<Long>();
-    reg.addLifecycleListener(removed::add);
+    samplerRegistry.addLifecycleListener(removed::add);
     exportOn(1);
-    reg.connectionChanged(1);
+    samplerRegistry.connectionChanged(1);
     assertThat(removed).isEmpty();
     connections.put(1L, connection(1, 5, false));
-    reg.connectionChanged(1);
+    samplerRegistry.connectionChanged(1);
     assertThat(removed).containsExactly(1L);
   }
 
   @Test
   void watchdogPushesStaleWhenNoSampleForThreeIntervals() {
-    SampleListener listener = mock(SampleListener.class);
-    reg.addListener(listener);
-    reg.watch(1); // interval 5s
-    scheduler.advance(Duration.ofSeconds(1)); // first sample at T0
+    SampleListener sampleListener = mock(SampleListener.class);
+    samplerRegistry.addListener(sampleListener);
+    samplerRegistry.watch(1); // interval 5s
+    recordingTaskScheduler.advance(Duration.ofSeconds(1)); // first sample at T0
     // The periodic task stops producing samples, as a hung sample would.
-    scheduler.periodicTasks().get(0).cancel(false);
-    scheduler.advance(Duration.ofSeconds(14)); // T0+15s: exactly 3 intervals, not yet stale
-    verify(listener, never()).onStale(any());
-    scheduler.advance(Duration.ofSeconds(5)); // T0+20s
-    verify(listener, times(1)).onStale(any());
-    assertThat(reg.isStale(1, reg.latest(1).orElseThrow())).isTrue();
-    scheduler.advance(Duration.ofSeconds(5)); // the push repeats every interval (heartbeat)
-    verify(listener, times(2)).onStale(any());
+    recordingTaskScheduler.periodicTasks().get(0).cancel(false);
+    recordingTaskScheduler.advance(Duration.ofSeconds(14)); // T0+15s: exactly 3 intervals, not yet stale
+    verify(sampleListener, never()).onStale(any());
+    recordingTaskScheduler.advance(Duration.ofSeconds(5)); // T0+20s
+    verify(sampleListener, times(1)).onStale(any());
+    assertThat(samplerRegistry.isStale(1, samplerRegistry.latest(1).orElseThrow())).isTrue();
+    recordingTaskScheduler.advance(Duration.ofSeconds(5)); // the push repeats every interval (heartbeat)
+    verify(sampleListener, times(2)).onStale(any());
   }
 
   @Test
   void freshSamplesNeverTriggerStale() {
-    SampleListener listener = mock(SampleListener.class);
-    reg.addListener(listener);
-    reg.watch(1);
-    scheduler.advance(Duration.ofMinutes(2));
-    verify(listener, never()).onStale(any());
-    assertThat(reg.isStale(1, reg.latest(1).orElseThrow())).isFalse();
+    SampleListener sampleListener = mock(SampleListener.class);
+    samplerRegistry.addListener(sampleListener);
+    samplerRegistry.watch(1);
+    recordingTaskScheduler.advance(Duration.ofMinutes(2));
+    verify(sampleListener, never()).onStale(any());
+    assertThat(samplerRegistry.isStale(1, samplerRegistry.latest(1).orElseThrow())).isFalse();
   }
 
   @Test
   void stoppedEntryHasNoWatchdogButRetainedSampleIsStale() {
-    SampleListener listener = mock(SampleListener.class);
-    reg.addListener(listener);
-    var w = reg.watch(1);
-    scheduler.advance(Duration.ofSeconds(1));
-    reg.unwatch(1, w);
-    scheduler.advance(Duration.ofSeconds(30)); // grace stop
-    scheduler.advance(Duration.ofMinutes(5));
-    verify(listener, never()).onStale(any());
-    assertThat(reg.isStale(1, reg.latest(1).orElseThrow())).isTrue();
+    SampleListener sampleListener = mock(SampleListener.class);
+    samplerRegistry.addListener(sampleListener);
+    var w = samplerRegistry.watch(1);
+    recordingTaskScheduler.advance(Duration.ofSeconds(1));
+    samplerRegistry.unwatch(1, w);
+    recordingTaskScheduler.advance(Duration.ofSeconds(30)); // grace stop
+    recordingTaskScheduler.advance(Duration.ofMinutes(5));
+    verify(sampleListener, never()).onStale(any());
+    assertThat(samplerRegistry.isStale(1, samplerRegistry.latest(1).orElseThrow())).isTrue();
   }
 }

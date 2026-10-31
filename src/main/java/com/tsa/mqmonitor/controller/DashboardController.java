@@ -16,15 +16,17 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Controller
 class DashboardController {
-  private final ConnectionService connections;
-  private final SamplerRegistry registry;
-  private final SampleFragmentRenderer renderer;
+  private final ConnectionService connectionService;
+  private final SamplerRegistry samplerRegistry;
+  private final SampleFragmentRenderer sampleFragmentRenderer;
 
   DashboardController(
-      ConnectionService connections, SamplerRegistry registry, SampleFragmentRenderer renderer) {
-    this.connections = connections;
-    this.registry = registry;
-    this.renderer = renderer;
+      ConnectionService connectionService,
+      SamplerRegistry samplerRegistry,
+      SampleFragmentRenderer sampleFragmentRenderer) {
+    this.connectionService = connectionService;
+    this.samplerRegistry = samplerRegistry;
+    this.sampleFragmentRenderer = sampleFragmentRenderer;
   }
 
   @GetMapping("/connections/{id}")
@@ -33,16 +35,16 @@ class DashboardController {
       @RequestParam(defaultValue = "false") boolean showSystem,
       Model model) {
     MqConnection connection =
-        connections
+        connectionService
             .findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-    EvaluatedSample latest = registry.latest(id).orElse(null);
+    EvaluatedSample latest = samplerRegistry.latest(id).orElse(null);
     Map<String, String> fragments = new LinkedHashMap<>();
     if (latest != null) {
       // A suspended sampler keeps its last sample; never label an old one "Live".
-      boolean stale = registry.isStale(id, latest);
+      boolean stale = samplerRegistry.isStale(id, latest);
       for (String name : new String[] {"qmgr", "queues", "channels"}) {
-        fragments.put(name, renderer.render(name, latest, showSystem, stale));
+        fragments.put(name, sampleFragmentRenderer.render(name, latest, showSystem, stale));
       }
     }
     model.addAttribute("connection", connection);

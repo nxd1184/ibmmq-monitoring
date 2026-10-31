@@ -11,7 +11,7 @@ import org.springframework.validation.Errors;
 
 class ConnectionFormValidatorTest {
   MqMonitorProperties.Tls noDefaults = new MqMonitorProperties.Tls(null, null, null, null);
-  ConnectionFormValidator v = new ConnectionFormValidator(noDefaults);
+  ConnectionFormValidator connectionFormValidator = new ConnectionFormValidator(noDefaults);
 
   ConnectionForm f(TlsMode m) {
     var f = new ConnectionForm();
@@ -21,7 +21,7 @@ class ConnectionFormValidatorTest {
 
   Errors validate(ConnectionForm f) {
     var e = new BeanPropertyBindingResult(f, "form");
-    v.validate(f, e);
+    connectionFormValidator.validate(f, e);
     return e;
   }
 

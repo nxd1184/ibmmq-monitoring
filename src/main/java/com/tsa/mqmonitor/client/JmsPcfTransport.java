@@ -49,9 +49,9 @@ public final class JmsPcfTransport implements PcfTransport {
 
   private final Connection connection;
   private final Session session;
-  private final TemporaryQueue replyQueue;
-  private final MessageProducer producer;
-  private final MessageConsumer consumer;
+  private final TemporaryQueue temporaryQueue;
+  private final MessageProducer messageProducer;
+  private final MessageConsumer messageConsumer;
   private final long timeoutMillis;
   private final String queueManager;
   /** Volatile and lock-free so {@link #close()} can run while a send is blocked. */
@@ -60,16 +60,16 @@ public final class JmsPcfTransport implements PcfTransport {
   private JmsPcfTransport(
       Connection connection,
       Session session,
-      TemporaryQueue replyQueue,
-      MessageProducer producer,
-      MessageConsumer consumer,
+      TemporaryQueue temporaryQueue,
+      MessageProducer messageProducer,
+      MessageConsumer messageConsumer,
       long timeoutMillis,
       String queueManager) {
     this.connection = connection;
     this.session = session;
-    this.replyQueue = replyQueue;
-    this.producer = producer;
-    this.consumer = consumer;
+    this.temporaryQueue = temporaryQueue;
+    this.messageProducer = messageProducer;
+    this.messageConsumer = messageConsumer;
     this.timeoutMillis = timeoutMillis;
     this.queueManager = queueManager;
   }
@@ -80,51 +80,52 @@ public final class JmsPcfTransport implements PcfTransport {
    * manager.
    */
   public static JmsPcfTransport connect(MqTarget target, SSLSocketFactory sslOrNull) {
-    MQConnectionFactory factory;
+    MQConnectionFactory mqConnectionFactory;
     try {
-      factory = connectionFactory(target, sslOrNull);
+      mqConnectionFactory = connectionFactory(target, sslOrNull);
     } catch (JMSException e) {
       throw translate(e, target.queueManager());
     }
     return BoundedConnect.within(
         target.connectTimeout(),
-        () -> open(factory, target),
+        () -> open(mqConnectionFactory, target),
         JmsPcfTransport::close,
         cause -> cause instanceof MqGatewayException e ? e : translate(cause, target.queueManager()));
   }
 
-  private static JmsPcfTransport open(MQConnectionFactory factory, MqTarget target) {
+  private static JmsPcfTransport open(MQConnectionFactory mqConnectionFactory, MqTarget target) {
     Connection connection;
     try {
-      connection = factory.createConnection();
+      connection = mqConnectionFactory.createConnection();
     } catch (JMSException e) {
       throw translateConnect(e, target.queueManager());
     }
     Session session = null;
-    TemporaryQueue replyQueue = null;
-    MessageProducer producer = null;
+    TemporaryQueue temporaryQueue = null;
+    MessageProducer messageProducer = null;
     try {
       session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
       // The temporary queue is created from the reply model queue.
       String model = isBlank(target.replyQueueModel()) ? DEFAULT_MODEL : target.replyQueueModel();
       try {
-        replyQueue = session.createTemporaryQueue();
+        temporaryQueue = session.createTemporaryQueue();
       } catch (JMSException e) {
         throw translate(e, model);
       }
       long timeoutMillis = target.connectTimeout().toMillis();
-      producer = session.createProducer(session.createQueue(COMMAND_QUEUE_URI));
-      producer.setDeliveryMode(DeliveryMode.NON_PERSISTENT);
-      producer.setTimeToLive(timeoutMillis);
-      MessageConsumer consumer = session.createConsumer(replyQueue);
+      messageProducer = session.createProducer(session.createQueue(COMMAND_QUEUE_URI));
+      messageProducer.setDeliveryMode(DeliveryMode.NON_PERSISTENT);
+      messageProducer.setTimeToLive(timeoutMillis);
+      MessageConsumer messageConsumer = session.createConsumer(temporaryQueue);
       connection.start();
       return new JmsPcfTransport(
-          connection, session, replyQueue, producer, consumer, timeoutMillis, target.queueManager());
+          connection, session, temporaryQueue, messageProducer, messageConsumer, timeoutMillis,
+          target.queueManager());
     } catch (JMSException e) {
-      release(connection, session, replyQueue, producer, null);
+      release(connection, session, temporaryQueue, messageProducer, null);
       throw translate(e, target.queueManager());
     } catch (RuntimeException e) {
-      release(connection, session, replyQueue, producer, null);
+      release(connection, session, temporaryQueue, messageProducer, null);
       throw e;
     }
   }
@@ -153,14 +154,14 @@ public final class JmsPcfTransport implements PcfTransport {
       message.setIntProperty(WMQConstants.JMS_IBM_ENCODING, CMQC.MQENC_NATIVE); // as PcfCodec.encode writes
       message.setStringProperty(WMQConstants.JMS_IBM_FORMAT, MQConstants.MQFMT_ADMIN);
       message.setIntProperty(WMQConstants.JMS_IBM_MSGTYPE, MQConstants.MQMT_REQUEST);
-      message.setJMSReplyTo(replyQueue);
-      producer.send(message);
+      message.setJMSReplyTo(temporaryQueue);
+      messageProducer.send(message);
       // The command server copies the request MsgId into each reply's CorrelId.
       String requestId = message.getJMSMessageID();
 
       List<PCFMessage> responses = new ArrayList<>();
       while (true) {
-        Message reply = consumer.receive(timeoutMillis);
+        Message reply = messageConsumer.receive(timeoutMillis);
         if (reply == null) {
           throw new MqUnreachableException(
               "no PCF reply within " + (timeoutMillis / 1000) + "s", null);
@@ -221,26 +222,28 @@ public final class JmsPcfTransport implements PcfTransport {
 
   static MQConnectionFactory connectionFactory(MqTarget target, SSLSocketFactory ssl)
       throws JMSException {
-    var factory = new MQConnectionFactory();
-    factory.setTransportType(WMQConstants.WMQ_CM_CLIENT);
-    factory.setHostName(target.host());
-    factory.setPort(target.port());
-    factory.setChannel(target.channel());
-    factory.setQueueManager(target.queueManager());
-    factory.setAppName(NativePcfTransport.APP_NAME);
-    factory.setClientReconnectOptions(WMQConstants.WMQ_CLIENT_RECONNECT_DISABLED);
-    if (!isBlank(target.replyQueueModel())) factory.setTemporaryModel(target.replyQueueModel());
+    var mqConnectionFactory = new MQConnectionFactory();
+    mqConnectionFactory.setTransportType(WMQConstants.WMQ_CM_CLIENT);
+    mqConnectionFactory.setHostName(target.host());
+    mqConnectionFactory.setPort(target.port());
+    mqConnectionFactory.setChannel(target.channel());
+    mqConnectionFactory.setQueueManager(target.queueManager());
+    mqConnectionFactory.setAppName(NativePcfTransport.APP_NAME);
+    mqConnectionFactory.setClientReconnectOptions(WMQConstants.WMQ_CLIENT_RECONNECT_DISABLED);
+    if (!isBlank(target.replyQueueModel())) {
+      mqConnectionFactory.setTemporaryModel(target.replyQueueModel());
+    }
     if (!isBlank(target.username())) {
-      factory.setStringProperty(WMQConstants.USERID, target.username());
-      factory.setStringProperty(
+      mqConnectionFactory.setStringProperty(WMQConstants.USERID, target.username());
+      mqConnectionFactory.setStringProperty(
           WMQConstants.PASSWORD, target.password() == null ? "" : target.password());
-      factory.setBooleanProperty(WMQConstants.USER_AUTHENTICATION_MQCSP, true);
+      mqConnectionFactory.setBooleanProperty(WMQConstants.USER_AUTHENTICATION_MQCSP, true);
     }
     if (ssl != null) {
-      factory.setSSLCipherSuite(CipherSuites.forCipherSpec(target.tls().cipherSpec()));
-      factory.setSSLSocketFactory(ssl);
+      mqConnectionFactory.setSSLCipherSuite(CipherSuites.forCipherSpec(target.tls().cipherSpec()));
+      mqConnectionFactory.setSSLSocketFactory(ssl);
     }
-    return factory;
+    return mqConnectionFactory;
   }
 
   /**
@@ -274,14 +277,14 @@ public final class JmsPcfTransport implements PcfTransport {
   private static void release(
       Connection connection,
       Session session,
-      TemporaryQueue replyQueue,
-      MessageProducer producer,
-      MessageConsumer consumer) {
-    JmsUtils.closeMessageConsumer(consumer);
-    JmsUtils.closeMessageProducer(producer);
-    if (replyQueue != null) {
+      TemporaryQueue temporaryQueue,
+      MessageProducer messageProducer,
+      MessageConsumer messageConsumer) {
+    JmsUtils.closeMessageConsumer(messageConsumer);
+    JmsUtils.closeMessageProducer(messageProducer);
+    if (temporaryQueue != null) {
       try {
-        replyQueue.delete();
+        temporaryQueue.delete();
       } catch (JMSException | RuntimeException e) {
         // closing the connection removes it as well
       }

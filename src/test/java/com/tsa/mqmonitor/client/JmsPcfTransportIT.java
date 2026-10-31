@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 class JmsPcfTransportIT {
   static final String MODEL = "SYSTEM.DEFAULT.MODEL.QUEUE";
 
-  final DefaultMqGatewayFactory factory = new DefaultMqGatewayFactory(NativePcfTransportIT.props());
+  final DefaultMqGatewayFactory defaultMqGatewayFactory = new DefaultMqGatewayFactory(NativePcfTransportIT.props());
 
   static MqContainer mq() {
     return MqContainer.instance();
@@ -33,7 +33,7 @@ class JmsPcfTransportIT {
   }
 
   MqGateway open(String user, String pw) {
-    return factory.open(target(mq(), "DEV.ADMIN.SVRCONN", user, pw, TlsSettings.none(), MODEL));
+    return defaultMqGatewayFactory.open(target(mq(), "DEV.ADMIN.SVRCONN", user, pw, TlsSettings.none(), MODEL));
   }
 
   MqGateway open() {
@@ -101,7 +101,7 @@ class JmsPcfTransportIT {
   @Test
   void customReplyModelIsUsed() {
     var t = target(mq(), "DEV.ADMIN.SVRCONN", "admin", MqContainer.PASSWORD, TlsSettings.none(), "NO.SUCH.MODEL");
-    assertThatThrownBy(() -> factory.open(t))
+    assertThatThrownBy(() -> defaultMqGatewayFactory.open(t))
         .isInstanceOf(MqGatewayException.class)
         .hasMessageContaining("2085");
   }
@@ -116,7 +116,7 @@ class JmsPcfTransportIT {
   @Test
   void unknownChannelIsUnreachable() {
     var t = target(mq(), "NO.SUCH.CHANNEL", "admin", MqContainer.PASSWORD, TlsSettings.none(), MODEL);
-    assertThatThrownBy(() -> factory.open(t)).isInstanceOf(MqUnreachableException.class);
+    assertThatThrownBy(() -> defaultMqGatewayFactory.open(t)).isInstanceOf(MqUnreachableException.class);
   }
 
   @Test
@@ -125,7 +125,7 @@ class JmsPcfTransportIT {
         "10.255.255.1", 1414, "QM1", "X", null, null, ClientType.SPRING_JMS,
         TlsSettings.none(), MODEL, Duration.ofSeconds(2));
     long start = System.nanoTime();
-    assertThatThrownBy(() -> factory.open(t)).isInstanceOf(MqUnreachableException.class);
+    assertThatThrownBy(() -> defaultMqGatewayFactory.open(t)).isInstanceOf(MqUnreachableException.class);
     assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
   }
 
@@ -134,7 +134,7 @@ class JmsPcfTransportIT {
     var c = MqContainer.tlsInstance();
     var tls = new TlsSettings(
         TlsMode.TLS, "ANY_TLS12_OR_HIGHER", c.truststore(), MqContainer.STORE_PASSWORD, null, null, null);
-    try (var gw = factory.open(target(c, "DEV.ADMIN.SVRCONN", "admin", MqContainer.PASSWORD, tls, MODEL))) {
+    try (var gw = defaultMqGatewayFactory.open(target(c, "DEV.ADMIN.SVRCONN", "admin", MqContainer.PASSWORD, tls, MODEL))) {
       assertThat(gw.inquireQueueManager().status()).isEqualTo("RUNNING");
     }
   }
@@ -146,7 +146,7 @@ class JmsPcfTransportIT {
         TlsMode.MUTUAL_TLS, "ANY_TLS12_OR_HIGHER",
         c.truststore(), MqContainer.STORE_PASSWORD,
         c.keystore(), MqContainer.STORE_PASSWORD, MqContainer.CLIENT_LABEL);
-    try (var gw = factory.open(target(c, "DEV.MTLS.SVRCONN", "admin", MqContainer.PASSWORD, tls, MODEL))) {
+    try (var gw = defaultMqGatewayFactory.open(target(c, "DEV.MTLS.SVRCONN", "admin", MqContainer.PASSWORD, tls, MODEL))) {
       assertThat(gw.inquireQueueManager().status()).isEqualTo("RUNNING");
     }
   }
@@ -157,6 +157,6 @@ class JmsPcfTransportIT {
     var tls = new TlsSettings(
         TlsMode.TLS, "ANY_TLS12_OR_HIGHER", c.truststore(), MqContainer.STORE_PASSWORD, null, null, null);
     var t = target(c, "DEV.MTLS.SVRCONN", "admin", MqContainer.PASSWORD, tls, MODEL);
-    assertThatThrownBy(() -> factory.open(t)).isInstanceOf(MqGatewayException.class);
+    assertThatThrownBy(() -> defaultMqGatewayFactory.open(t)).isInstanceOf(MqGatewayException.class);
   }
 }

@@ -23,9 +23,9 @@ import org.junit.jupiter.api.Test;
 class MqMeterBinderTest {
   static final Instant T0 = Instant.parse("2026-10-30T10:00:00Z");
 
-  SimpleMeterRegistry reg = new SimpleMeterRegistry();
+  SimpleMeterRegistry simpleMeterRegistry = new SimpleMeterRegistry();
   Map<Long, MqConnection> connections = new HashMap<>();
-  MqMeterBinder binder = new MqMeterBinder(reg, id -> Optional.ofNullable(connections.get(id)));
+  MqMeterBinder mqMeterBinder = new MqMeterBinder(simpleMeterRegistry, id -> Optional.ofNullable(connections.get(id)));
 
   MqConnection connection(long id, String name, boolean export) {
     var c =
@@ -51,90 +51,90 @@ class MqMeterBinderTest {
   @Test
   void publishesDepthForExportedConnection() {
     var c = connection(1, "QM1", true);
-    binder.onSample(sample(c, List.of(queue("APP.Q", 7, null)), List.of(), Map.of()));
+    mqMeterBinder.onSample(sample(c, List.of(queue("APP.Q", 7, null)), List.of(), Map.of()));
     assertThat(
-            reg.get("ibmmq.queue.depth").tags("connection", "QM1", "queue", "APP.Q", "qmgr", "QM1")
+            simpleMeterRegistry.get("ibmmq.queue.depth").tags("connection", "QM1", "queue", "APP.Q", "qmgr", "QM1")
                 .gauge().value())
         .isEqualTo(7);
-    assertThat(reg.get("ibmmq.queue.max.depth").gauge().value()).isEqualTo(100);
-    assertThat(reg.get("ibmmq.queue.open.input.count").gauge().value()).isEqualTo(1);
-    assertThat(reg.get("ibmmq.queue.open.output.count").gauge().value()).isEqualTo(2);
-    assertThat(reg.get("ibmmq.qmgr.reachable").gauge().value()).isEqualTo(1);
+    assertThat(simpleMeterRegistry.get("ibmmq.queue.max.depth").gauge().value()).isEqualTo(100);
+    assertThat(simpleMeterRegistry.get("ibmmq.queue.open.input.count").gauge().value()).isEqualTo(1);
+    assertThat(simpleMeterRegistry.get("ibmmq.queue.open.output.count").gauge().value()).isEqualTo(2);
+    assertThat(simpleMeterRegistry.get("ibmmq.qmgr.reachable").gauge().value()).isEqualTo(1);
   }
 
   @Test
   void ignoresNonExportedConnection() {
     var c = connection(2, "QM2", false);
-    binder.onSample(sample(c, List.of(queue("A", 1, null)), List.of(), Map.of()));
-    assertThat(reg.find("ibmmq.queue.depth").gauge()).isNull();
-    assertThat(reg.find("ibmmq.qmgr.reachable").gauge()).isNull();
+    mqMeterBinder.onSample(sample(c, List.of(queue("A", 1, null)), List.of(), Map.of()));
+    assertThat(simpleMeterRegistry.find("ibmmq.queue.depth").gauge()).isNull();
+    assertThat(simpleMeterRegistry.find("ibmmq.qmgr.reachable").gauge()).isNull();
   }
 
   @Test
   void nullAgeNotPublished() {
     var c = connection(1, "QM1", true);
-    binder.onSample(sample(c, List.of(queue("A", 1, null)), List.of(), Map.of()));
-    assertThat(reg.find("ibmmq.queue.oldest.message.age.seconds").gauge()).isNull();
-    binder.onSample(sample(c, List.of(queue("A", 1, 42)), List.of(), Map.of()));
-    assertThat(reg.get("ibmmq.queue.oldest.message.age.seconds").gauge().value()).isEqualTo(42);
+    mqMeterBinder.onSample(sample(c, List.of(queue("A", 1, null)), List.of(), Map.of()));
+    assertThat(simpleMeterRegistry.find("ibmmq.queue.oldest.message.age.seconds").gauge()).isNull();
+    mqMeterBinder.onSample(sample(c, List.of(queue("A", 1, 42)), List.of(), Map.of()));
+    assertThat(simpleMeterRegistry.get("ibmmq.queue.oldest.message.age.seconds").gauge().value()).isEqualTo(42);
   }
 
   @Test
   void healthReasonIsATag() {
     var c = connection(1, "QM1", true);
     String reason = "depth 80 is 80% of max 100";
-    binder.onSample(
+    mqMeterBinder.onSample(
         sample(c, List.of(queue("APP.Q", 80, null)), List.of(),
             Map.of("APP.Q", HealthVerdict.unhealthy(HealthReason.DEPTH_PERCENT, reason))));
     assertThat(
-            reg.get("ibmmq.health")
+            simpleMeterRegistry.get("ibmmq.health")
                 .tags("object", "queue", "name", "APP.Q", "reason", "depth_percent", "connection", "QM1")
                 .gauge().value())
         .isEqualTo(0);
-    assertThat(reg.get("ibmmq.health").tags("object", "connection", "name", "QM1").gauge().value())
+    assertThat(simpleMeterRegistry.get("ibmmq.health").tags("object", "connection", "name", "QM1").gauge().value())
         .isEqualTo(1);
   }
 
   @Test
   void channelStatusIsOneOnlyWhenRunning() {
     var c = connection(1, "QM1", true);
-    binder.onSample(
+    mqMeterBinder.onSample(
         sample(c, List.of(), List.of(new ChannelInfo("C1", "SVRCONN", "RUNNING"),
             new ChannelInfo("C2", "SDR", "STOPPED")), Map.of()));
-    assertThat(reg.get("ibmmq.channel.status").tag("channel", "C1").gauge().value()).isEqualTo(1);
-    assertThat(reg.get("ibmmq.channel.status").tag("channel", "C2").gauge().value()).isEqualTo(0);
+    assertThat(simpleMeterRegistry.get("ibmmq.channel.status").tag("channel", "C1").gauge().value()).isEqualTo(1);
+    assertThat(simpleMeterRegistry.get("ibmmq.channel.status").tag("channel", "C2").gauge().value()).isEqualTo(0);
   }
 
   @Test
   void unreachableSamplePublishesZeroReachable() {
     var c = connection(1, "QM1", true);
-    binder.onSample(sample(c, List.of(queue("A", 1, 5)), List.of(new ChannelInfo("C", "T", "RUNNING")), Map.of()));
+    mqMeterBinder.onSample(sample(c, List.of(queue("A", 1, 5)), List.of(new ChannelInfo("C", "T", "RUNNING")), Map.of()));
     var failed = new EvaluatedSample(Sample.failed(1, T0, "down"),
         HealthVerdict.unhealthy(HealthReason.UNREACHABLE, "down"), Map.of(), Map.of());
-    binder.onSample(failed);
-    assertThat(reg.get("ibmmq.health").tag("reason", "unreachable").gauge().value()).isEqualTo(0);
-    assertThat(reg.get("ibmmq.qmgr.reachable").gauge().value()).isEqualTo(0);
-    assertThat(reg.find("ibmmq.queue.depth").gauge()).isNull();
-    assertThat(reg.find("ibmmq.channel.status").gauge()).isNull();
+    mqMeterBinder.onSample(failed);
+    assertThat(simpleMeterRegistry.get("ibmmq.health").tag("reason", "unreachable").gauge().value()).isEqualTo(0);
+    assertThat(simpleMeterRegistry.get("ibmmq.qmgr.reachable").gauge().value()).isEqualTo(0);
+    assertThat(simpleMeterRegistry.find("ibmmq.queue.depth").gauge()).isNull();
+    assertThat(simpleMeterRegistry.find("ibmmq.channel.status").gauge()).isNull();
   }
 
   @Test
   void connectionRemovedDropsOnlyItsRows() {
     var a = connection(1, "QM1", true);
     var b = connection(2, "QM2", true);
-    binder.onSample(sample(a, List.of(queue("A", 1, null)), List.of(), Map.of()));
-    binder.onSample(sample(b, List.of(queue("B", 2, null)), List.of(), Map.of()));
-    binder.connectionRemoved(1);
-    assertThat(reg.find("ibmmq.queue.depth").tag("connection", "QM1").gauge()).isNull();
-    assertThat(reg.get("ibmmq.queue.depth").tag("connection", "QM2").gauge().value()).isEqualTo(2);
+    mqMeterBinder.onSample(sample(a, List.of(queue("A", 1, null)), List.of(), Map.of()));
+    mqMeterBinder.onSample(sample(b, List.of(queue("B", 2, null)), List.of(), Map.of()));
+    mqMeterBinder.connectionRemoved(1);
+    assertThat(simpleMeterRegistry.find("ibmmq.queue.depth").tag("connection", "QM1").gauge()).isNull();
+    assertThat(simpleMeterRegistry.get("ibmmq.queue.depth").tag("connection", "QM2").gauge().value()).isEqualTo(2);
   }
 
   @Test
   void sampleAfterExportTurnedOffRemovesRows() {
     var c = connection(1, "QM1", true);
-    binder.onSample(sample(c, List.of(queue("A", 1, null)), List.of(), Map.of()));
+    mqMeterBinder.onSample(sample(c, List.of(queue("A", 1, null)), List.of(), Map.of()));
     var off = connection(1, "QM1", false);
-    binder.onSample(sample(off, List.of(queue("A", 1, null)), List.of(), Map.of()));
-    assertThat(reg.find("ibmmq.queue.depth").gauge()).isNull();
+    mqMeterBinder.onSample(sample(off, List.of(queue("A", 1, null)), List.of(), Map.of()));
+    assertThat(simpleMeterRegistry.find("ibmmq.queue.depth").gauge()).isNull();
   }
 }

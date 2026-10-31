@@ -8,41 +8,41 @@ import org.junit.jupiter.api.Test;
 
 class SecretCipherTest {
 
-    SecretCipher cipher = new SecretCipher(new byte[32]);
+    SecretCipher secretCipher = new SecretCipher(new byte[32]);
 
     @Test
     void roundTrips() {
-        assertThat(cipher.decrypt(cipher.encrypt("s3cret"))).isEqualTo("s3cret");
+        assertThat(secretCipher.decrypt(secretCipher.encrypt("s3cret"))).isEqualTo("s3cret");
     }
 
     @Test
     void sameInputDifferentTokens() {
-        assertThat(cipher.encrypt("x")).isNotEqualTo(cipher.encrypt("x"));
+        assertThat(secretCipher.encrypt("x")).isNotEqualTo(secretCipher.encrypt("x"));
     }
 
     @Test
     void nullPassesThrough() {
-        assertThat(cipher.encrypt(null)).isNull();
-        assertThat(cipher.decrypt(null)).isNull();
+        assertThat(secretCipher.encrypt(null)).isNull();
+        assertThat(secretCipher.decrypt(null)).isNull();
     }
 
     @Test
     void tamperedTokenFails() {
-        byte[] raw = Base64.getDecoder().decode(cipher.encrypt("x"));
+        byte[] raw = Base64.getDecoder().decode(secretCipher.encrypt("x"));
         raw[raw.length - 1] ^= 1;
         String tampered = Base64.getEncoder().encodeToString(raw);
-        assertThatThrownBy(() -> cipher.decrypt(tampered)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> secretCipher.decrypt(tampered)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void nonBase64TokenFails() {
-        assertThatThrownBy(() -> cipher.decrypt("not base64!")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> secretCipher.decrypt("not base64!")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void shortTokenFails() {
         String shortToken = Base64.getEncoder().encodeToString(new byte[12 + 16 - 1]);
-        assertThatThrownBy(() -> cipher.decrypt(shortToken)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> secretCipher.decrypt(shortToken)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

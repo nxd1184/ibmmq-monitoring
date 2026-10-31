@@ -39,13 +39,13 @@ import org.slf4j.LoggerFactory;
 public class Sampler {
   private static final Logger log = LoggerFactory.getLogger(Sampler.class);
 
-  private final MqConnection connection;
-  private final MqTarget target;
+  private final MqConnection mqConnection;
+  private final MqTarget mqTarget;
   private final Thresholds thresholds;
-  private final MqGatewayFactory factory;
-  private final HealthEvaluator evaluator;
+  private final MqGatewayFactory mqGatewayFactory;
+  private final HealthEvaluator healthEvaluator;
   private final Clock clock;
-  private final List<SampleListener> listeners;
+  private final List<SampleListener> sampleListeners;
   private final ReentrantLock sampleLock = new ReentrantLock();
   /** Guarded by {@code sampleLock}. */
   private final Map<String, Instant> noConsumerSince = new HashMap<>();
@@ -55,20 +55,20 @@ public class Sampler {
   private volatile boolean retired;
 
   public Sampler(
-      MqConnection c,
-      MqTarget target,
-      Thresholds t,
-      MqGatewayFactory f,
-      HealthEvaluator e,
+      MqConnection mqConnection,
+      MqTarget mqTarget,
+      Thresholds thresholds,
+      MqGatewayFactory mqGatewayFactory,
+      HealthEvaluator healthEvaluator,
       Clock clock,
-      List<SampleListener> listeners) {
-    this.connection = c;
-    this.target = target;
-    this.thresholds = t;
-    this.factory = f;
-    this.evaluator = e;
+      List<SampleListener> sampleListeners) {
+    this.mqConnection = mqConnection;
+    this.mqTarget = mqTarget;
+    this.thresholds = thresholds;
+    this.mqGatewayFactory = mqGatewayFactory;
+    this.healthEvaluator = healthEvaluator;
     this.clock = clock;
-    this.listeners = listeners;
+    this.sampleListeners = sampleListeners;
   }
 
   public EvaluatedSample sampleOnce() {
@@ -86,9 +86,9 @@ public class Sampler {
         gw.beginSample();
         QueueManagerInfo qmgr = gw.inquireQueueManager();
         List<QueueInfo> queues =
-            gw.inquireQueues(connection.queueFilter(), connection.hideSystemQueues());
+            gw.inquireQueues(mqConnection.queueFilter(), mqConnection.hideSystemQueues());
         List<ChannelInfo> channels = gw.inquireChannels();
-        sample = new Sample(connection.id(), now, qmgr, queues, channels, null);
+        sample = new Sample(mqConnection.id(), now, qmgr, queues, channels, null);
         trackConsumers(queues, now);
       } catch (RuntimeException e) {
         if (!active()) {
@@ -98,7 +98,7 @@ public class Sampler {
         }
         sample = failed(now, gw, e);
       }
-      evaluated = evaluator.evaluate(sample, thresholds, noConsumerSince, now);
+      evaluated = healthEvaluator.evaluate(sample, thresholds, noConsumerSince, now);
     } finally {
       sampleLock.unlock();
     }
@@ -119,7 +119,7 @@ public class Sampler {
         gw = gateway();
         gw.beginSample();
         QueueManagerInfo qmgr = gw.inquireQueueManager();
-        sample = new Sample(connection.id(), now, qmgr, List.of(), List.of(), null);
+        sample = new Sample(mqConnection.id(), now, qmgr, List.of(), List.of(), null);
       } catch (RuntimeException e) {
         if (!active()) {
           // stopped while sampling: the failure is ours (gateway closed under it), not MQ's
@@ -128,7 +128,7 @@ public class Sampler {
         }
         sample = failed(now, gw, e);
       }
-      evaluated = evaluator.evaluate(sample, thresholds, Map.of(), now);
+      evaluated = healthEvaluator.evaluate(sample, thresholds, Map.of(), now);
     } finally {
       sampleLock.unlock();
     }
@@ -181,14 +181,14 @@ public class Sampler {
     EvaluatedSample last = latest;
     return last != null
         ? last
-        : evaluator.evaluate(
-            Sample.failed(connection.id(), now, "sampler stopped"), thresholds, Map.of(), now);
+        : healthEvaluator.evaluate(
+            Sample.failed(mqConnection.id(), now, "sampler stopped"), thresholds, Map.of(), now);
   }
 
   /** Closes without blocking the caller: a close on a dead connection can hang on its socket. */
   private void closeGateway(MqGateway gw) {
     if (gw != null) {
-      long id = connection.id();
+      long id = mqConnection.id();
       BoundedCall.runAsync("closing gateway for connection " + id, gw::close);
     }
   }
@@ -198,9 +198,9 @@ public class Sampler {
     if (gw != null) {
       return gw;
     }
-    gw = factory.open(target);
+    gw = mqGatewayFactory.open(mqTarget);
     if (!gateway.compareAndSet(null, gw)) {
-      closeGateway(gw); // cannot happen while samples are serialized; never leak a connection
+      closeGateway(gw); // cannot happen while samples are serialized; never leak a mqConnection
       throw new IllegalStateException("gateway replaced concurrently");
     }
     if (!active()) {
@@ -213,9 +213,9 @@ public class Sampler {
 
   private Sample failed(Instant now, MqGateway gw, RuntimeException e) {
     String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-    log.debug("Sample of connection {} failed: {}", connection.id(), message);
+    log.debug("Sample of connection {} failed: {}", mqConnection.id(), message);
     closeIfCurrent(gw);
-    return Sample.failed(connection.id(), now, message);
+    return Sample.failed(mqConnection.id(), now, message);
   }
 
   /** Drops a failed gateway so the next sample reconnects; leaves a newer gateway alone. */
@@ -245,11 +245,11 @@ public class Sampler {
     }
     logReachabilityChange(latest, evaluated);
     latest = evaluated;
-    for (SampleListener listener : listeners) {
+    for (SampleListener listener : sampleListeners) {
       try {
         listener.onSample(evaluated);
       } catch (RuntimeException e) {
-        log.warn("Sample listener failed for connection {}: {}", connection.id(), e.toString());
+        log.warn("Sample listener failed for connection {}: {}", mqConnection.id(), e.toString());
         log.debug("Sample listener failure detail", e);
       }
     }
@@ -262,9 +262,9 @@ public class Sampler {
     boolean isReachable = next.sample().reachable();
     if (wasReachable && !isReachable) {
       log.warn("Connection {} ({}) is unreachable: {}",
-          connection.id(), connection.name(), next.sample().error());
+          mqConnection.id(), mqConnection.name(), next.sample().error());
     } else if (!wasReachable && isReachable) {
-      log.info("Connection {} ({}) is reachable again", connection.id(), connection.name());
+      log.info("Connection {} ({}) is reachable again", mqConnection.id(), mqConnection.name());
     }
   }
 }

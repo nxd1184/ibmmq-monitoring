@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 public class CryptoConfig {
 
     @Bean
-    public SecretCipher secretCipher(MqMonitorProperties props) {
-        return SecretCipher.fromBase64(props.encryptionKey());
+    public SecretCipher secretCipher(MqMonitorProperties mqMonitorProperties) {
+        return SecretCipher.fromBase64(mqMonitorProperties.encryptionKey());
     }
 }

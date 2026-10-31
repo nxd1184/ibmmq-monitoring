@@ -24,12 +24,12 @@ import javax.net.ssl.SSLSocketFactory;
 public final class NativePcfTransport implements PcfTransport {
   static final String APP_NAME = "mq-monitor";
 
-  private final MQQueueManager qmgr;
-  private final PCFMessageAgent agent;
+  private final MQQueueManager mqQueueManager;
+  private final PCFMessageAgent pcfMessageAgent;
 
-  private NativePcfTransport(MQQueueManager qmgr, PCFMessageAgent agent) {
-    this.qmgr = qmgr;
-    this.agent = agent;
+  private NativePcfTransport(MQQueueManager mqQueueManager, PCFMessageAgent pcfMessageAgent) {
+    this.mqQueueManager = mqQueueManager;
+    this.pcfMessageAgent = pcfMessageAgent;
   }
 
   /**
@@ -55,36 +55,36 @@ public final class NativePcfTransport implements PcfTransport {
 
   private static NativePcfTransport open(
       MqTarget target, Hashtable<String, Object> props, Duration timeout) throws MQException {
-    MQQueueManager qmgr = new MQQueueManager(target.queueManager(), props);
+    MQQueueManager mqQueueManager = new MQQueueManager(target.queueManager(), props);
     try {
-      var agent = new PCFMessageAgent();
-      if (!isBlank(target.replyQueueModel())) agent.setModelQueueName(target.replyQueueModel());
+      var pcfMessageAgent = new PCFMessageAgent();
+      if (!isBlank(target.replyQueueModel())) pcfMessageAgent.setModelQueueName(target.replyQueueModel());
       // PCFAgent takes seconds and converts to milliseconds itself.
-      agent.setWaitInterval((int) Math.max(1, timeout.toSeconds()));
-      agent.connect(qmgr);
-      return new NativePcfTransport(qmgr, agent);
+      pcfMessageAgent.setWaitInterval((int) Math.max(1, timeout.toSeconds()));
+      pcfMessageAgent.connect(mqQueueManager);
+      return new NativePcfTransport(mqQueueManager, pcfMessageAgent);
     } catch (MQDataException e) {
-      disconnectQuietly(qmgr);
+      disconnectQuietly(mqQueueManager);
       throw PcfErrors.translate(e.reasonCode, target.replyQueueModel(), e);
     } catch (RuntimeException e) {
-      disconnectQuietly(qmgr);
+      disconnectQuietly(mqQueueManager);
       throw e;
     }
   }
 
   @Override
   public List<PCFMessage> send(PCFMessage request) throws MQException, MQDataException, IOException {
-    return Arrays.asList(agent.send(request));
+    return Arrays.asList(pcfMessageAgent.send(request));
   }
 
   @Override
   public void close() {
     try {
-      agent.disconnect();
+      pcfMessageAgent.disconnect();
     } catch (MQDataException | RuntimeException e) {
       // already broken; nothing to release
     }
-    disconnectQuietly(qmgr);
+    disconnectQuietly(mqQueueManager);
   }
 
   static Hashtable<String, Object> properties(MqTarget target, SSLSocketFactory ssl) {

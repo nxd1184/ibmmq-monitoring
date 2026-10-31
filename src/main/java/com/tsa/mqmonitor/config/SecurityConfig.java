@@ -60,9 +60,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    UserDetailsService userDetailsService(MqMonitorProperties props, PasswordEncoder encoder) {
-        var admin = User.withUsername(props.admin().username())
-                .password(encoder.encode(props.admin().password()))
+    UserDetailsService userDetailsService(MqMonitorProperties mqMonitorProperties, PasswordEncoder passwordEncoder) {
+        var admin = User.withUsername(mqMonitorProperties.admin().username())
+                .password(passwordEncoder.encode(mqMonitorProperties.admin().password()))
                 .roles("ADMIN")
                 .build();
         return new InMemoryUserDetailsManager(admin);

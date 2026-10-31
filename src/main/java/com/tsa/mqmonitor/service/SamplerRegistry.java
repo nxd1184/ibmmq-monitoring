@@ -45,10 +45,10 @@ public class SamplerRegistry {
   /** A sample older than this many sample intervals is stale. */
   public static final int STALE_AFTER_INTERVALS = 3;
 
-  private final ConnectionService connections;
-  private final MqGatewayFactory factory;
-  private final HealthEvaluator evaluator;
-  private final TaskScheduler scheduler;
+  private final ConnectionService connectionService;
+  private final MqGatewayFactory mqGatewayFactory;
+  private final HealthEvaluator healthEvaluator;
+  private final TaskScheduler taskScheduler;
   private final Clock clock;
   private final Duration grace;
   private final Duration listInterval;
@@ -77,19 +77,19 @@ public class SamplerRegistry {
   }
 
   public SamplerRegistry(
-      ConnectionService connections,
-      MqGatewayFactory factory,
-      HealthEvaluator evaluator,
-      @Qualifier("samplerScheduler") TaskScheduler scheduler,
+      ConnectionService connectionService,
+      MqGatewayFactory mqGatewayFactory,
+      HealthEvaluator healthEvaluator,
+      @Qualifier("samplerScheduler") TaskScheduler taskScheduler,
       Clock clock,
-      MqMonitorProperties props) {
-    this.connections = connections;
-    this.factory = factory;
-    this.evaluator = evaluator;
-    this.scheduler = scheduler;
+      MqMonitorProperties mqMonitorProperties) {
+    this.connectionService = connectionService;
+    this.mqGatewayFactory = mqGatewayFactory;
+    this.healthEvaluator = healthEvaluator;
+    this.taskScheduler = taskScheduler;
     this.clock = clock;
-    this.grace = Duration.ofSeconds(props.sampling().watcherGraceSeconds());
-    this.listInterval = Duration.ofSeconds(Math.max(1, props.sampling().listIntervalSeconds()));
+    this.grace = Duration.ofSeconds(mqMonitorProperties.sampling().watcherGraceSeconds());
+    this.listInterval = Duration.ofSeconds(Math.max(1, mqMonitorProperties.sampling().listIntervalSeconds()));
   }
 
   public void addListener(SampleListener l) {
@@ -120,7 +120,7 @@ public class SamplerRegistry {
       return false;
     }
     Entry e = entries.get(connectionId);
-    MqConnection c = e != null ? e.connection : connections.findById(connectionId).orElse(null);
+    MqConnection c = e != null ? e.connection : connectionService.findById(connectionId).orElse(null);
     return c != null && isStale(s, interval(c), clock.instant());
   }
 
@@ -141,7 +141,7 @@ public class SamplerRegistry {
       Entry e = entries.get(connectionId);
       if (e == null) {
         MqConnection c =
-            connections
+            connectionService
                 .findById(connectionId)
                 .orElseThrow(() -> new UnknownConnectionException(connectionId));
         e = newEntry(c);
@@ -167,7 +167,7 @@ public class SamplerRegistry {
     synchronized (lock) {
       listWatchers.add(watcherId);
       if (listTask == null) {
-        listTask = scheduler.scheduleWithFixedDelay(safely(this::sampleList), listInterval);
+        listTask = taskScheduler.scheduleWithFixedDelay(safely(this::sampleList), listInterval);
       }
     }
   }
@@ -188,7 +188,7 @@ public class SamplerRegistry {
   }
 
   public void connectionChanged(long id) {
-    Optional<MqConnection> fresh = connections.findById(id);
+    Optional<MqConnection> fresh = connectionService.findById(id);
     if (fresh.isEmpty()) {
       connectionDeleted(id);
       return;
@@ -241,7 +241,7 @@ public class SamplerRegistry {
 
   @EventListener(ApplicationReadyEvent.class)
   public void refreshPrometheusExports() {
-    List<MqConnection> exports = connections.findPrometheusExports();
+    List<MqConnection> exports = connectionService.findPrometheusExports();
     Set<Long> exportIds = exports.stream().map(MqConnection::id).collect(Collectors.toSet());
     List<Long> stale =
         entries.entrySet().stream()
@@ -251,7 +251,7 @@ public class SamplerRegistry {
             .toList();
     List<MqConnection> noLongerExporting = new ArrayList<>();
     for (Long id : stale) {
-      connections.findById(id).ifPresentOrElse(noLongerExporting::add, () -> connectionDeleted(id));
+      connectionService.findById(id).ifPresentOrElse(noLongerExporting::add, () -> connectionDeleted(id));
     }
     List<Sampler> toRetire = new ArrayList<>();
     List<Sampler> toRelease = new ArrayList<>();
@@ -329,7 +329,7 @@ public class SamplerRegistry {
       }
       deletedSinceListRead.clear();
     }
-    List<MqConnection> all = connections.findAll();
+    List<MqConnection> all = connectionService.findAll();
     Map<Long, Sampler> toRun = new LinkedHashMap<>();
     List<Sampler> toRetire = new ArrayList<>();
     synchronized (lock) {
@@ -381,10 +381,10 @@ public class SamplerRegistry {
   private Sampler newSampler(MqConnection c) {
     return new Sampler(
         c,
-        connections.targetFor(c),
-        connections.thresholdsFor(c),
-        factory,
-        evaluator,
+        connectionService.targetFor(c),
+        connectionService.thresholdsFor(c),
+        mqGatewayFactory,
+        healthEvaluator,
         clock,
         listeners);
   }
@@ -398,7 +398,7 @@ public class SamplerRegistry {
       Sampler s = e.sampler;
       s.resume();
       Duration interval = interval(e.connection);
-      e.periodic = scheduler.scheduleWithFixedDelay(safely(s::sampleOnce), interval);
+      e.periodic = taskScheduler.scheduleWithFixedDelay(safely(s::sampleOnce), interval);
       armWatchdog(id, e, interval);
     }
     return listSamplers.remove(id);
@@ -408,7 +408,7 @@ public class SamplerRegistry {
   private void armWatchdog(long id, Entry e, Duration interval) {
     cancelWatchdog(e);
     e.watchdog =
-        scheduler.schedule(safely(() -> watchdogTick(id, e)), clock.instant().plus(interval));
+        taskScheduler.schedule(safely(() -> watchdogTick(id, e)), clock.instant().plus(interval));
   }
 
   /**
@@ -451,7 +451,7 @@ public class SamplerRegistry {
         && e.periodic != null
         && e.pendingStop == null) {
       e.pendingStop =
-          scheduler.schedule(safely(() -> stopIfIdle(id, e)), clock.instant().plus(grace));
+          taskScheduler.schedule(safely(() -> stopIfIdle(id, e)), clock.instant().plus(grace));
     }
   }
 

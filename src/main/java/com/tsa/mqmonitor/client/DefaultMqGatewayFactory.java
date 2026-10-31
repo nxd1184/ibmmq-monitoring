@@ -9,8 +9,9 @@ import org.springframework.stereotype.Component;
 public class DefaultMqGatewayFactory implements MqGatewayFactory {
   private final Duration defaultConnectTimeout;
 
-  public DefaultMqGatewayFactory(MqMonitorProperties props) {
-    this.defaultConnectTimeout = Duration.ofSeconds(props.mq().connectTimeoutSeconds());
+  public DefaultMqGatewayFactory(MqMonitorProperties mqMonitorProperties) {
+    this.defaultConnectTimeout =
+        Duration.ofSeconds(mqMonitorProperties.mq().connectTimeoutSeconds());
   }
 
   @Override

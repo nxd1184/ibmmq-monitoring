@@ -26,7 +26,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 class DashboardControllerTest extends PostgresTestBase {
-  @Autowired MockMvc mvc;
+  @Autowired MockMvc mockMvc;
   @Autowired ConnectionService connections;
   @Autowired MqConnectionRepository repo;
   @MockitoBean SamplerRegistry registry;
@@ -55,7 +55,7 @@ class DashboardControllerTest extends PostgresTestBase {
 
   @Test
   void pageRendersNameAndStreamUrl() throws Exception {
-    mvc.perform(get("/connections/" + id).with(user("admin")))
+    mockMvc.perform(get("/connections/" + id).with(user("admin")))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("Payments QM")))
         .andExpect(content().string(containsString("sse-connect=\"/connections/" + id + "/stream\"")))
@@ -68,7 +68,7 @@ class DashboardControllerTest extends PostgresTestBase {
 
   @Test
   void streamContainerTracksFeedDisconnects() throws Exception {
-    mvc.perform(get("/connections/" + id).with(user("admin")))
+    mockMvc.perform(get("/connections/" + id).with(user("admin")))
         .andExpect(status().isOk())
         .andExpect(
             content()
@@ -78,7 +78,7 @@ class DashboardControllerTest extends PostgresTestBase {
 
   @Test
   void showSystemFlagFlowsToStreamAndToggle() throws Exception {
-    mvc.perform(get("/connections/" + id).param("showSystem", "true").with(user("admin")))
+    mockMvc.perform(get("/connections/" + id).param("showSystem", "true").with(user("admin")))
         .andExpect(status().isOk())
         .andExpect(
             content()
@@ -90,14 +90,14 @@ class DashboardControllerTest extends PostgresTestBase {
 
   @Test
   void unknownIdIs404() throws Exception {
-    mvc.perform(get("/connections/" + (id + 1000)).with(user("admin")))
+    mockMvc.perform(get("/connections/" + (id + 1000)).with(user("admin")))
         .andExpect(status().isNotFound());
   }
 
   @Test
   void latestSampleIsRenderedIntoThePage() throws Exception {
     when(registry.latest(id)).thenReturn(Optional.of(SseControllerTest.sample(id)));
-    mvc.perform(get("/connections/" + id).with(user("admin")))
+    mockMvc.perform(get("/connections/" + id).with(user("admin")))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString(">12345<")))
         .andExpect(content().string(not(containsString("Waiting for first sample"))));
@@ -108,7 +108,7 @@ class DashboardControllerTest extends PostgresTestBase {
     var latest = SseControllerTest.sample(id);
     when(registry.latest(id)).thenReturn(Optional.of(latest));
     when(registry.isStale(id, latest)).thenReturn(true);
-    mvc.perform(get("/connections/" + id).with(user("admin")))
+    mockMvc.perform(get("/connections/" + id).with(user("admin")))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("Stale · last sample")))
         .andExpect(content().string(not(containsString("live-word"))));
@@ -116,14 +116,14 @@ class DashboardControllerTest extends PostgresTestBase {
 
   @Test
   void streamContainerReloadsOnExpiredSession() throws Exception {
-    mvc.perform(get("/connections/" + id).with(user("admin")))
+    mockMvc.perform(get("/connections/" + id).with(user("admin")))
         .andExpect(content().string(containsString("data-reload-on-401")))
         .andExpect(content().string(containsString("/js/sse-auth.js")));
   }
 
   @Test
   void anonymousIsRedirectedToLogin() throws Exception {
-    mvc.perform(get("/connections/" + id))
+    mockMvc.perform(get("/connections/" + id))
         .andExpect(status().is3xxRedirection())
         .andExpect(redirectedUrlPattern("**/login"));
   }

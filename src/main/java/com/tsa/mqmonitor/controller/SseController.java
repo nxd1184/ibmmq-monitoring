@@ -53,9 +53,9 @@ public class SseController implements SampleListener {
   private static final Logger log = LoggerFactory.getLogger(SseController.class);
   private static final int SEND_THREADS = 4;
 
-  private final SamplerRegistry registry;
-  private final ConnectionService connections;
-  private final SampleFragmentRenderer renderer;
+  private final SamplerRegistry samplerRegistry;
+  private final ConnectionService connectionService;
+  private final SampleFragmentRenderer sampleFragmentRenderer;
   private final Supplier<SseEmitter> emitterFactory;
   private final ExecutorService sendPool = Executors.newFixedThreadPool(SEND_THREADS, daemonThreads());
   private final Map<Long, Set<Subscription>> byConnection = new ConcurrentHashMap<>();
@@ -82,24 +82,26 @@ public class SseController implements SampleListener {
 
   @Autowired
   public SseController(
-      SamplerRegistry registry, ConnectionService connections, SampleFragmentRenderer renderer) {
-    this(registry, connections, renderer, () -> new SseEmitter(0L));
+      SamplerRegistry samplerRegistry,
+      ConnectionService connectionService,
+      SampleFragmentRenderer sampleFragmentRenderer) {
+    this(samplerRegistry, connectionService, sampleFragmentRenderer, () -> new SseEmitter(0L));
   }
 
   SseController(
-      SamplerRegistry registry,
-      ConnectionService connections,
-      SampleFragmentRenderer renderer,
+      SamplerRegistry samplerRegistry,
+      ConnectionService connectionService,
+      SampleFragmentRenderer sampleFragmentRenderer,
       Supplier<SseEmitter> emitterFactory) {
-    this.registry = registry;
-    this.connections = connections;
-    this.renderer = renderer;
+    this.samplerRegistry = samplerRegistry;
+    this.connectionService = connectionService;
+    this.sampleFragmentRenderer = sampleFragmentRenderer;
     this.emitterFactory = emitterFactory;
   }
 
   @PostConstruct
   void subscribe() {
-    registry.addListener(this);
+    samplerRegistry.addListener(this);
   }
 
   /** Completes every open stream so shutdown is not held by never-ending requests. */
@@ -123,7 +125,7 @@ public class SseController implements SampleListener {
       @PathVariable long id, @RequestParam(defaultValue = "false") boolean showSystem) {
     String watcherId;
     try {
-      watcherId = registry.watch(id);
+      watcherId = samplerRegistry.watch(id);
     } catch (UnknownConnectionException unknown) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND);
     } catch (RuntimeException ex) {
@@ -141,9 +143,9 @@ public class SseController implements SampleListener {
         });
     register(sub);
     try {
-      registry
+      samplerRegistry
           .latest(id)
-          .ifPresent(s -> enqueue(sub, renderAll(s, showSystem, registry.isStale(id, s))));
+          .ifPresent(s -> enqueue(sub, renderAll(s, showSystem, samplerRegistry.isStale(id, s))));
     } catch (RuntimeException ex) {
       close(sub); // the emitter is never returned, so no callback would release the watch
       throw ex;
@@ -154,14 +156,14 @@ public class SseController implements SampleListener {
   @GetMapping(path = "/connections/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter listStream() {
     String watcherId = UUID.randomUUID().toString();
-    registry.watchList(watcherId);
+    samplerRegistry.watchList(watcherId);
     var sub = new Subscription(emitterFactory.get(), null, watcherId, false);
     listSubscriptions.add(sub);
     register(sub);
     try {
       Map<String, String> rows = new LinkedHashMap<>();
-      for (MqConnection c : connections.findAll()) {
-        rows.put(rowEvent(c.id()), renderer.renderRow(c, registry.latest(c.id()).orElse(null)));
+      for (MqConnection c : connectionService.findAll()) {
+        rows.put(rowEvent(c.id()), sampleFragmentRenderer.renderRow(c, samplerRegistry.latest(c.id()).orElse(null)));
       }
       enqueue(sub, rows);
     } catch (RuntimeException ex) {
@@ -191,11 +193,11 @@ public class SseController implements SampleListener {
     }
     try {
       if (!listSubscriptions.isEmpty()) {
-        connections
+        connectionService
             .findById(id)
             .ifPresent(
                 c -> {
-                  Map<String, String> row = Map.of(rowEvent(id), renderer.renderRow(c, s));
+                  Map<String, String> row = Map.of(rowEvent(id), sampleFragmentRenderer.renderRow(c, s));
                   for (Subscription sub : listSubscriptions) {
                     enqueue(sub, row);
                   }
@@ -219,7 +221,7 @@ public class SseController implements SampleListener {
       return;
     }
     try {
-      Map<String, String> header = Map.of("qmgr", renderer.render("qmgr", latest, false, true));
+      Map<String, String> header = Map.of("qmgr", sampleFragmentRenderer.render("qmgr", latest, false, true));
       for (Subscription sub : subs) {
         enqueue(sub, header);
       }
@@ -243,7 +245,7 @@ public class SseController implements SampleListener {
     sub.outbox.clear();
     if (sub.connectionId == null) {
       listSubscriptions.remove(sub);
-      registry.unwatchList(sub.watcherId);
+      samplerRegistry.unwatchList(sub.watcherId);
     } else {
       byConnection.compute(
           sub.connectionId,
@@ -254,14 +256,14 @@ public class SseController implements SampleListener {
             set.remove(sub);
             return set.isEmpty() ? null : set;
           });
-      registry.unwatch(sub.connectionId, sub.watcherId);
+      samplerRegistry.unwatch(sub.connectionId, sub.watcherId);
     }
   }
 
   private Map<String, String> renderAll(EvaluatedSample s, boolean showSystem, boolean stale) {
     Map<String, String> events = new LinkedHashMap<>();
     for (String name : new String[] {"qmgr", "queues", "channels"}) {
-      events.put(name, renderer.render(name, s, showSystem, stale));
+      events.put(name, sampleFragmentRenderer.render(name, s, showSystem, stale));
     }
     return events;
   }

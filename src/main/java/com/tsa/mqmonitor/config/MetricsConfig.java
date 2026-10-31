@@ -14,11 +14,11 @@ public class MetricsConfig {
 
   @Bean
   MqMeterBinder mqMeterBinder(
-      MeterRegistry registry, ConnectionService connections, SamplerRegistry samplers) {
-    MqMeterBinder binder = new MqMeterBinder(registry, connections::findById);
-    samplers.addListener(binder);
-    samplers.addLifecycleListener(binder);
-    return binder;
+      MeterRegistry meterRegistry, ConnectionService connectionService, SamplerRegistry samplerRegistry) {
+    MqMeterBinder mqMeterBinder = new MqMeterBinder(meterRegistry, connectionService::findById);
+    samplerRegistry.addListener(mqMeterBinder);
+    samplerRegistry.addLifecycleListener(mqMeterBinder);
+    return mqMeterBinder;
   }
 
   /** Prometheus shows MQ series only: nothing about the tool's own JVM, HTTP server or pools. */

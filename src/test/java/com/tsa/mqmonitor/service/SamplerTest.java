@@ -40,11 +40,11 @@ import org.junit.jupiter.api.Test;
 class SamplerTest {
   static final Instant T0 = Instant.parse("2026-10-30T10:00:00Z");
 
-  MqGatewayFactory factory = mock(MqGatewayFactory.class);
-  MqGateway gw = mock(MqGateway.class);
-  SampleListener listener = mock(SampleListener.class);
+  MqGatewayFactory mqGatewayFactory = mock(MqGatewayFactory.class);
+  MqGateway mqGateway = mock(MqGateway.class);
+  SampleListener sampleListener = mock(SampleListener.class);
   MutableClock clock = new MutableClock(T0);
-  QueueManagerInfo qm = new QueueManagerInfo("QM1", "RUNNING", 940, "UNIX");
+  QueueManagerInfo queueManagerInfo = new QueueManagerInfo("QM1", "RUNNING", 940, "UNIX");
   Sampler sampler;
 
   static MqConnection connection() {
@@ -61,43 +61,43 @@ class SamplerTest {
 
   @BeforeEach
   void setUp() {
-    when(factory.open(any())).thenReturn(gw);
-    when(gw.inquireQueueManager()).thenReturn(qm);
-    when(gw.inquireQueues(any(), anyBoolean())).thenReturn(List.of());
-    when(gw.inquireChannels()).thenReturn(List.of());
+    when(mqGatewayFactory.open(any())).thenReturn(mqGateway);
+    when(mqGateway.inquireQueueManager()).thenReturn(queueManagerInfo);
+    when(mqGateway.inquireQueues(any(), anyBoolean())).thenReturn(List.of());
+    when(mqGateway.inquireChannels()).thenReturn(List.of());
     sampler =
         new Sampler(
             connection(),
             mock(MqTarget.class),
             new Thresholds(null, 80, 60, null),
-            factory,
+            mqGatewayFactory,
             new HealthEvaluator(),
             clock,
-            List.of(listener));
+            List.of(sampleListener));
   }
 
   @Test
   void reusesOneGatewayAcrossSamples() {
     sampler.sampleOnce();
     sampler.sampleOnce();
-    verify(factory, times(1)).open(any());
+    verify(mqGatewayFactory, times(1)).open(any());
   }
 
   @Test
   void failureProducesFailedSampleAndReconnectsNextTime() {
-    when(gw.inquireQueueManager())
+    when(mqGateway.inquireQueueManager())
         .thenThrow(new MqUnreachableException("MQRC 2009 connection broken", null))
-        .thenReturn(qm);
+        .thenReturn(queueManagerInfo);
     assertThat(sampler.sampleOnce().sample().error()).isEqualTo("MQRC 2009 connection broken");
     sampler.sampleOnce();
-    verify(factory, times(2)).open(any());
-    verify(gw, timeout(2000)).close();
+    verify(mqGatewayFactory, times(2)).open(any());
+    verify(mqGateway, timeout(2000)).close();
   }
 
   @Test
   void noConsumerSinceIsTrackedAcrossSamples() {
     clock.set(T0);
-    when(gw.inquireQueues(any(), anyBoolean())).thenReturn(List.of(q(0)));
+    when(mqGateway.inquireQueues(any(), anyBoolean())).thenReturn(List.of(q(0)));
     sampler.sampleOnce();
     clock.set(T0.plusSeconds(61));
     assertThat(sampler.sampleOnce().queues().get("APP.Q").reason()).isEqualTo("no consumer for 61s");
@@ -105,7 +105,7 @@ class SamplerTest {
 
   @Test
   void consumerReturningResetsTracking() {
-    when(gw.inquireQueues(any(), anyBoolean()))
+    when(mqGateway.inquireQueues(any(), anyBoolean()))
         .thenReturn(List.of(q(0)))
         .thenReturn(List.of(q(1)))
         .thenReturn(List.of(q(0)));
@@ -119,7 +119,7 @@ class SamplerTest {
   @Test
   void listenersReceiveEverySample() {
     sampler.sampleOnce();
-    verify(listener).onSample(any());
+    verify(sampleListener).onSample(any());
   }
 
   @Test
@@ -129,7 +129,7 @@ class SamplerTest {
     doThrow(new IllegalStateException("boom")).when(failing).onSample(any());
     var s =
         new Sampler(
-            connection(), mock(MqTarget.class), new Thresholds(null, 80, 60, null), factory,
+            connection(), mock(MqTarget.class), new Thresholds(null, 80, 60, null), mqGatewayFactory,
             new HealthEvaluator(), clock, List.of(failing, second));
     s.sampleOnce();
     verify(second).onSample(any());
@@ -138,10 +138,10 @@ class SamplerTest {
   @Test
   void queueManagerOnlySampleSkipsQueuesAndChannels() {
     var e = sampler.sampleQueueManagerOnly();
-    assertThat(e.sample().qmgr()).isEqualTo(qm);
+    assertThat(e.sample().qmgr()).isEqualTo(queueManagerInfo);
     assertThat(e.sample().queues()).isEmpty();
-    verify(gw, org.mockito.Mockito.never()).inquireQueues(any(), anyBoolean());
-    verify(gw, org.mockito.Mockito.never()).inquireChannels();
+    verify(mqGateway, org.mockito.Mockito.never()).inquireQueues(any(), anyBoolean());
+    verify(mqGateway, org.mockito.Mockito.never()).inquireChannels();
   }
 
   @Test
@@ -150,8 +150,8 @@ class SamplerTest {
     sampler.retire();
     sampler.sampleOnce();
     sampler.sampleQueueManagerOnly();
-    verify(factory, times(1)).open(any());
-    verify(gw, timeout(2000)).close();
+    verify(mqGatewayFactory, times(1)).open(any());
+    verify(mqGateway, timeout(2000)).close();
   }
 
   /** A transport whose send never returns, like a PCF exchange with a frozen queue manager. */
@@ -180,9 +180,9 @@ class SamplerTest {
   @Test
   void frozenQueueManagerFailsTheSampleWithinTheBoundAndReconnectsNextTime() throws Exception {
     var frozen = new BlockingTransport();
-    when(factory.open(any()))
+    when(mqGatewayFactory.open(any()))
         .thenReturn(new PcfMqGateway(frozen, Duration.ofMillis(300)))
-        .thenReturn(gw);
+        .thenReturn(mqGateway);
     long start = System.nanoTime();
     EvaluatedSample failed = sampler.sampleOnce();
     long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
@@ -194,13 +194,13 @@ class SamplerTest {
 
     EvaluatedSample next = sampler.sampleOnce();
     assertThat(next.sample().reachable()).isTrue();
-    verify(factory, times(2)).open(any());
+    verify(mqGatewayFactory, times(2)).open(any());
   }
 
   @Test
   void retireWhileASampleIsBlockedReturnsPromptly() throws Exception {
     var frozen = new BlockingTransport();
-    when(factory.open(any())).thenReturn(new PcfMqGateway(frozen, Duration.ofSeconds(30)));
+    when(mqGatewayFactory.open(any())).thenReturn(new PcfMqGateway(frozen, Duration.ofSeconds(30)));
     ExecutorService pool = Executors.newSingleThreadExecutor();
     try {
       Future<EvaluatedSample> running = pool.submit(sampler::sampleOnce);
@@ -222,12 +222,12 @@ class SamplerTest {
   void retiredSamplerPublishesNothing() throws Exception {
     var inQmgr = new CountDownLatch(1);
     var proceed = new CountDownLatch(1);
-    when(gw.inquireQueueManager())
+    when(mqGateway.inquireQueueManager())
         .thenAnswer(
             inv -> {
               inQmgr.countDown();
               proceed.await(2, TimeUnit.SECONDS);
-              return qm;
+              return queueManagerInfo;
             });
     ExecutorService pool = Executors.newSingleThreadExecutor();
     try {
@@ -239,7 +239,7 @@ class SamplerTest {
     } finally {
       pool.shutdownNow();
     }
-    verify(listener, never()).onSample(any());
+    verify(sampleListener, never()).onSample(any());
     assertThat(sampler.latest()).isEmpty();
   }
 }

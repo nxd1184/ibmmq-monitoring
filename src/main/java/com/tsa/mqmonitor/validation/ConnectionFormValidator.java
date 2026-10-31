@@ -15,8 +15,8 @@ public class ConnectionFormValidator implements Validator {
   private final MqMonitorProperties.Tls defaults;
 
   @Autowired
-  public ConnectionFormValidator(MqMonitorProperties props) {
-    this(props.tls());
+  public ConnectionFormValidator(MqMonitorProperties mqMonitorProperties) {
+    this(mqMonitorProperties.tls());
   }
 
   public ConnectionFormValidator(MqMonitorProperties.Tls defaults) {

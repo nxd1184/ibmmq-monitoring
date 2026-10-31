@@ -50,7 +50,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class SseControllerTest extends PostgresTestBase {
-  @Autowired MockMvc mvc;
+  @Autowired MockMvc mockMvc;
   @Autowired SseController controller;
   @MockitoBean SamplerRegistry registry;
 
@@ -147,14 +147,14 @@ class SseControllerTest extends PostgresTestBase {
   /** Completes the emitter and lets MockMvc finish the async request, as a container would. */
   private void finish(MvcResult result, SseEmitter emitter) throws Exception {
     emitter.complete();
-    mvc.perform(asyncDispatch(result));
+    mockMvc.perform(asyncDispatch(result));
   }
 
   @Test
   void streamWatchesThenUnwatchesOnCompletion() throws Exception {
     when(registry.watch(1L)).thenReturn("w1");
     MvcResult result =
-        mvc.perform(get("/connections/1/stream").with(user("admin")))
+        mockMvc.perform(get("/connections/1/stream").with(user("admin")))
             .andExpect(request().asyncStarted())
             .andReturn();
     verify(registry).watch(1L);
@@ -172,7 +172,7 @@ class SseControllerTest extends PostgresTestBase {
   void clientDisconnectUnwatchesOnce() throws Exception {
     when(registry.watch(4L)).thenReturn("w4");
     MvcResult result =
-        mvc.perform(get("/connections/4/stream").with(user("admin")))
+        mockMvc.perform(get("/connections/4/stream").with(user("admin")))
             .andExpect(request().asyncStarted())
             .andReturn();
     var async = (MockAsyncContext) result.getRequest().getAsyncContext();
@@ -191,7 +191,7 @@ class SseControllerTest extends PostgresTestBase {
   @Test
   void failedSendClosesTheStream() throws Exception {
     when(registry.watch(5L)).thenReturn("w5");
-    mvc.perform(get("/connections/5/stream").with(user("admin")))
+    mockMvc.perform(get("/connections/5/stream").with(user("admin")))
         .andExpect(request().asyncStarted());
     onlyEmitter(5L).complete(); // a later send now throws IllegalStateException
 
@@ -208,7 +208,7 @@ class SseControllerTest extends PostgresTestBase {
     when(registry.watch(1L)).thenReturn("w1");
     when(registry.latest(1L)).thenReturn(Optional.of(sample(1L)));
     MvcResult result =
-        mvc.perform(get("/connections/1/stream").with(user("admin")))
+        mockMvc.perform(get("/connections/1/stream").with(user("admin")))
             .andExpect(request().asyncStarted())
             .andReturn();
     await("initial events", bodyContains(result, "event:channels"));
@@ -224,7 +224,7 @@ class SseControllerTest extends PostgresTestBase {
   void laterSamplesArePushedToTheConnectionsEmitters() throws Exception {
     when(registry.watch(2L)).thenReturn("w2");
     MvcResult result =
-        mvc.perform(get("/connections/2/stream").with(user("admin")))
+        mockMvc.perform(get("/connections/2/stream").with(user("admin")))
             .andExpect(request().asyncStarted())
             .andReturn();
     controller.onSample(sample(3L));
@@ -241,7 +241,7 @@ class SseControllerTest extends PostgresTestBase {
   void decryptFailureIsAServerErrorNot404() {
     when(registry.watch(7L)).thenThrow(new IllegalArgumentException("stored secret was tampered with"));
     org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> mvc.perform(get("/connections/7/stream").with(user("admin"))))
+            () -> mockMvc.perform(get("/connections/7/stream").with(user("admin"))))
         .hasRootCauseInstanceOf(IllegalArgumentException.class);
     assertThat(controller.emittersFor(7L)).isEmpty();
   }
@@ -250,7 +250,7 @@ class SseControllerTest extends PostgresTestBase {
   void stalePushReplacesTheHeader() throws Exception {
     when(registry.watch(8L)).thenReturn("w8");
     MvcResult result =
-        mvc.perform(get("/connections/8/stream").with(user("admin")))
+        mockMvc.perform(get("/connections/8/stream").with(user("admin")))
             .andExpect(request().asyncStarted())
             .andReturn();
     controller.onStale(sample(8L));
@@ -269,7 +269,7 @@ class SseControllerTest extends PostgresTestBase {
     when(registry.isStale(org.mockito.ArgumentMatchers.eq(9L), org.mockito.ArgumentMatchers.any()))
         .thenReturn(true);
     MvcResult result =
-        mvc.perform(get("/connections/9/stream").with(user("admin")))
+        mockMvc.perform(get("/connections/9/stream").with(user("admin")))
             .andExpect(request().asyncStarted())
             .andReturn();
     await("initial events", bodyContains(result, "event:channels"));
@@ -313,7 +313,7 @@ class SseControllerTest extends PostgresTestBase {
     when(registry.watch(6L)).thenReturn("w6");
     when(registry.latest(6L)).thenThrow(new IllegalStateException("boom"));
     org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> mvc.perform(get("/connections/6/stream").with(user("admin"))))
+            () -> mockMvc.perform(get("/connections/6/stream").with(user("admin"))))
         .hasRootCauseMessage("boom");
     verify(registry, times(1)).unwatch(6L, "w6");
     assertThat(controller.emittersFor(6L)).isEmpty();
@@ -322,21 +322,21 @@ class SseControllerTest extends PostgresTestBase {
   @Test
   void unknownConnectionIs404() throws Exception {
     when(registry.watch(99L)).thenThrow(new UnknownConnectionException(99L));
-    mvc.perform(get("/connections/99/stream").with(user("admin")))
+    mockMvc.perform(get("/connections/99/stream").with(user("admin")))
         .andExpect(status().isNotFound());
     assertThat(controller.emittersFor(99L)).isEmpty();
   }
 
   @Test
   void streamRequiresLogin() throws Exception {
-    mvc.perform(get("/connections/1/stream")).andExpect(status().isUnauthorized());
+    mockMvc.perform(get("/connections/1/stream")).andExpect(status().isUnauthorized());
     verify(registry, never()).watch(1L);
   }
 
   @Test
   void listStreamWatchesAndUnwatchesList() throws Exception {
     MvcResult result =
-        mvc.perform(get("/connections/stream").with(user("admin")))
+        mockMvc.perform(get("/connections/stream").with(user("admin")))
             .andExpect(request().asyncStarted())
             .andReturn();
     var watchers = controller.listWatcherIds();

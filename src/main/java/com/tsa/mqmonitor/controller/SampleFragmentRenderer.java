@@ -29,10 +29,10 @@ public class SampleFragmentRenderer {
   private static final Set<String> SELECTOR = Set.of("content");
   private static final Format FORMAT = new Format();
 
-  private final SpringTemplateEngine engine;
+  private final SpringTemplateEngine springTemplateEngine;
 
-  public SampleFragmentRenderer(SpringTemplateEngine engine) {
-    this.engine = engine;
+  public SampleFragmentRenderer(SpringTemplateEngine springTemplateEngine) {
+    this.springTemplateEngine = springTemplateEngine;
   }
 
   public String render(String fragment, EvaluatedSample s, boolean showSystem) {
@@ -62,7 +62,7 @@ public class SampleFragmentRenderer {
 
   private String process(String fragment, Context ctx) {
     ctx.setVariable("fmt", FORMAT);
-    return engine.process(
+    return springTemplateEngine.process(
         new TemplateSpec("fragments/" + fragment, SELECTOR, TemplateMode.HTML, null), ctx);
   }
 

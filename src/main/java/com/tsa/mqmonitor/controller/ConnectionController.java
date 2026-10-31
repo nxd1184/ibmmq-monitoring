@@ -31,28 +31,28 @@ import org.springframework.web.server.ResponseStatusException;
 class ConnectionController {
   private static final String FORM = "connections/form";
 
-  private final ConnectionService connections;
-  private final ConnectionFormValidator tlsValidator;
-  private final SamplerRegistry registry;
-  private final SampleFragmentRenderer renderer;
-  private final MqMonitorProperties props;
+  private final ConnectionService connectionService;
+  private final ConnectionFormValidator connectionFormValidator;
+  private final SamplerRegistry samplerRegistry;
+  private final SampleFragmentRenderer sampleFragmentRenderer;
+  private final MqMonitorProperties mqMonitorProperties;
 
   ConnectionController(
-      ConnectionService connections,
-      ConnectionFormValidator tlsValidator,
-      SamplerRegistry registry,
-      SampleFragmentRenderer renderer,
-      MqMonitorProperties props) {
-    this.connections = connections;
-    this.tlsValidator = tlsValidator;
-    this.registry = registry;
-    this.renderer = renderer;
-    this.props = props;
+      ConnectionService connectionService,
+      ConnectionFormValidator connectionFormValidator,
+      SamplerRegistry samplerRegistry,
+      SampleFragmentRenderer sampleFragmentRenderer,
+      MqMonitorProperties mqMonitorProperties) {
+    this.connectionService = connectionService;
+    this.connectionFormValidator = connectionFormValidator;
+    this.samplerRegistry = samplerRegistry;
+    this.sampleFragmentRenderer = sampleFragmentRenderer;
+    this.mqMonitorProperties = mqMonitorProperties;
   }
 
   @InitBinder("connectionForm")
   void initBinder(WebDataBinder binder) {
-    binder.addValidators(tlsValidator);
+    binder.addValidators(connectionFormValidator);
   }
 
   @ModelAttribute("clientTypes")
@@ -72,7 +72,7 @@ class ConnectionController {
 
   @ModelAttribute("thresholdDefaults")
   MqMonitorProperties.Thresholds thresholdDefaults() {
-    return props.thresholds();
+    return mqMonitorProperties.thresholds();
   }
 
   @GetMapping("/")
@@ -83,8 +83,8 @@ class ConnectionController {
   @GetMapping("/connections")
   String list(Model model) {
     List<String> rows =
-        connections.findAll().stream()
-            .map(c -> renderer.renderRow(c, registry.latest(c.id()).orElse(null)))
+        connectionService.findAll().stream()
+            .map(c -> sampleFragmentRenderer.renderRow(c, samplerRegistry.latest(c.id()).orElse(null)))
             .toList();
     model.addAttribute("rows", rows);
     return "connections/list";
@@ -105,7 +105,7 @@ class ConnectionController {
 
   @GetMapping("/connections/{id}/edit")
   String edit(@PathVariable long id, Model model) {
-    model.addAttribute("connectionForm", connections.toForm(find(id)));
+    model.addAttribute("connectionForm", connectionService.toForm(find(id)));
     return FORM;
   }
 
@@ -123,7 +123,7 @@ class ConnectionController {
   Object delete(
       @PathVariable long id,
       @RequestHeader(name = "HX-Request", required = false) String htmx) {
-    connections.delete(id);
+    connectionService.delete(id);
     if (htmx != null) {
       return ResponseEntity.ok().body("");
     }
@@ -139,7 +139,7 @@ class ConnectionController {
       model.addAttribute("errors", messages(result));
       model.addAttribute("result", null);
     } else {
-      ConnectionTestResult outcome = connections.test(form);
+      ConnectionTestResult outcome = connectionService.test(form);
       model.addAttribute("errors", List.of());
       model.addAttribute("result", outcome);
     }
@@ -154,7 +154,7 @@ class ConnectionController {
   private String persist(ConnectionForm form, BindingResult result) {
     if (!result.hasErrors()) {
       try {
-        connections.save(form);
+        connectionService.save(form);
         return "redirect:/connections";
       } catch (DuplicateKeyException e) {
         result.rejectValue(
@@ -165,7 +165,7 @@ class ConnectionController {
   }
 
   private MqConnection find(long id) {
-    return connections
+    return connectionService
         .findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
   }

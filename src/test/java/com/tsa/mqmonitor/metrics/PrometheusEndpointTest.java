@@ -31,7 +31,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 class PrometheusEndpointTest extends PostgresTestBase {
-  @Autowired MockMvc mvc;
+  @Autowired MockMvc mockMvc;
   @Autowired ConnectionService service;
   @Autowired MqConnectionRepository repo;
   @Autowired MqMeterBinder binder;
@@ -71,7 +71,7 @@ class PrometheusEndpointTest extends PostgresTestBase {
             List.of(new QueueInfo("APP.Q", 7, 100, 1, 1, null, null, null)), List.of(), null);
     binder.onSample(new EvaluatedSample(sample, HealthVerdict.healthy(), Map.of(), Map.of()));
 
-    var body = mvc.perform(get("/actuator/prometheus")).andReturn().getResponse().getContentAsString();
+    var body = mockMvc.perform(get("/actuator/prometheus")).andReturn().getResponse().getContentAsString();
 
     assertThat(body)
         .contains("ibmmq_queue_depth{connection=\"QM1\",qmgr=\"QM1\",queue=\"APP.Q\"} 7.0")

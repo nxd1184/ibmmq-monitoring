@@ -25,19 +25,19 @@ public final class SecretCipher {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    private final SecretKeySpec key;
+    private final SecretKeySpec secretKeySpec;
 
     public SecretCipher(byte[] key32) {
         if (key32.length != KEY_BYTES) {
             throw new IllegalStateException(KEY_MESSAGE);
         }
-        this.key = new SecretKeySpec(key32, "AES");
+        this.secretKeySpec = new SecretKeySpec(key32, "AES");
     }
 
-    public static SecretCipher fromBase64(String key) {
+    public static SecretCipher fromBase64(String secretKeySpec) {
         byte[] decoded;
         try {
-            decoded = Base64.getDecoder().decode(key);
+            decoded = Base64.getDecoder().decode(secretKeySpec);
         } catch (IllegalArgumentException e) {
             throw new IllegalStateException(KEY_MESSAGE, e);
         }
@@ -52,7 +52,7 @@ public final class SecretCipher {
         RANDOM.nextBytes(iv);
         try {
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
+            cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec, new GCMParameterSpec(TAG_BITS, iv));
             byte[] ciphertextWithTag = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
             byte[] token = ByteBuffer.allocate(IV_BYTES + ciphertextWithTag.length)
                     .put(iv)
@@ -74,7 +74,7 @@ public final class SecretCipher {
         }
         try {
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, raw, 0, IV_BYTES));
+            cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, new GCMParameterSpec(TAG_BITS, raw, 0, IV_BYTES));
             byte[] plain = cipher.doFinal(raw, IV_BYTES, raw.length - IV_BYTES);
             return new String(plain, StandardCharsets.UTF_8);
         } catch (AEADBadTagException e) {

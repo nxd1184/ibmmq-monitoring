@@ -42,19 +42,19 @@ public class PcfMqGateway implements MqGateway {
   private static final DateTimeFormatter PUT_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
   private static final DateTimeFormatter PUT_TIME = DateTimeFormatter.ofPattern("HH.mm.ss");
 
-  private final PcfTransport transport;
+  private final PcfTransport pcfTransport;
   private final Duration timeout;
   private final AtomicBoolean closed = new AtomicBoolean();
   private volatile boolean broken;
   private volatile long deadlineNanos;
   private volatile boolean deadlineSet;
 
-  public PcfMqGateway(PcfTransport transport) {
-    this(transport, DEFAULT_TIMEOUT);
+  public PcfMqGateway(PcfTransport pcfTransport) {
+    this(pcfTransport, DEFAULT_TIMEOUT);
   }
 
-  public PcfMqGateway(PcfTransport transport, Duration timeout) {
-    this.transport = transport;
+  public PcfMqGateway(PcfTransport pcfTransport, Duration timeout) {
+    this.pcfTransport = pcfTransport;
     this.timeout = timeout == null || timeout.isZero() || timeout.isNegative() ? DEFAULT_TIMEOUT : timeout;
   }
 
@@ -166,7 +166,7 @@ public class PcfMqGateway implements MqGateway {
   @Override
   public void close() {
     if (closed.compareAndSet(false, true)) {
-      transport.close();
+      pcfTransport.close();
     }
   }
 
@@ -221,7 +221,7 @@ public class PcfMqGateway implements MqGateway {
     return BoundedCall.within(
             budget,
             timeoutMessage(),
-            () -> transport.send(request),
+            () -> pcfTransport.send(request),
             late -> {},
             cause -> {
               if (cause instanceof MQException

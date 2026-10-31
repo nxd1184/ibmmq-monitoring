@@ -40,7 +40,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 class ConnectionControllerTest extends PostgresTestBase {
-  @Autowired MockMvc mvc;
+  @Autowired MockMvc mockMvc;
   @Autowired ConnectionService connections;
   @Autowired MqConnectionRepository repo;
   @MockitoBean MqGatewayFactory factory;
@@ -85,21 +85,21 @@ class ConnectionControllerTest extends PostgresTestBase {
 
   @Test
   void listRequiresLogin() throws Exception {
-    mvc.perform(get("/connections"))
+    mockMvc.perform(get("/connections"))
         .andExpect(status().is3xxRedirection())
         .andExpect(redirectedUrlPattern("**/login"));
   }
 
   @Test
   void rootRedirectsToConnections() throws Exception {
-    mvc.perform(get("/").with(user("admin")))
+    mockMvc.perform(get("/").with(user("admin")))
         .andExpect(status().is3xxRedirection())
         .andExpect(redirectedUrl("/connections"));
   }
 
   @Test
   void listShowsEmptyState() throws Exception {
-    mvc.perform(get("/connections").with(user("admin")))
+    mockMvc.perform(get("/connections").with(user("admin")))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("New connection")))
         .andExpect(content().string(containsString("No connections")));
@@ -107,7 +107,7 @@ class ConnectionControllerTest extends PostgresTestBase {
 
   @Test
   void createPersistsAndRedirects() throws Exception {
-    mvc.perform(validPost("/connections", "Prod"))
+    mockMvc.perform(validPost("/connections", "Prod"))
         .andExpect(status().is3xxRedirection())
         .andExpect(redirectedUrl("/connections"));
     assertThat(repo.count()).isEqualTo(1);
@@ -116,7 +116,7 @@ class ConnectionControllerTest extends PostgresTestBase {
   @Test
   void duplicateNameShowsFieldError() throws Exception {
     connections.save(valid("Prod"));
-    mvc.perform(validPost("/connections", "Prod"))
+    mockMvc.perform(validPost("/connections", "Prod"))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("a connection with this name already exists")));
     assertThat(repo.count()).isEqualTo(1);
@@ -124,7 +124,7 @@ class ConnectionControllerTest extends PostgresTestBase {
 
   @Test
   void overLongChannelShowsFieldErrorInsteadOf500() throws Exception {
-    mvc.perform(validPost("/connections", "Prod", "channel", "C".repeat(21)))
+    mockMvc.perform(validPost("/connections", "Prod", "channel", "C".repeat(21)))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("size must be between 0 and 20")));
     assertThat(repo.count()).isZero();
@@ -132,14 +132,14 @@ class ConnectionControllerTest extends PostgresTestBase {
 
   @Test
   void blankQueueFilterIsSavedAsWildcard() throws Exception {
-    mvc.perform(validPost("/connections", "Prod", "queueFilter", ""))
+    mockMvc.perform(validPost("/connections", "Prod", "queueFilter", ""))
         .andExpect(status().is3xxRedirection());
     assertThat(repo.findAll().get(0).queueFilter()).isEqualTo("*");
   }
 
   @Test
   void createWithTlsMissingCipherShowsError() throws Exception {
-    mvc.perform(validPost("/connections", "Prod", "tlsMode", "TLS"))
+    mockMvc.perform(validPost("/connections", "Prod", "tlsMode", "TLS"))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("Cipher spec is required for TLS")));
     assertThat(repo.count()).isZero();
@@ -147,7 +147,7 @@ class ConnectionControllerTest extends PostgresTestBase {
 
   @Test
   void newFormShowsDefaults() throws Exception {
-    mvc.perform(get("/connections/new").with(user("admin")))
+    mockMvc.perform(get("/connections/new").with(user("admin")))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("value=\"1414\"")))
         .andExpect(content().string(containsString("value=\"*\"")))
@@ -158,7 +158,7 @@ class ConnectionControllerTest extends PostgresTestBase {
   @Test
   void editFormHasNoPassword() throws Exception {
     long id = connections.save(valid("Prod")).id();
-    mvc.perform(get("/connections/" + id + "/edit").with(user("admin")))
+    mockMvc.perform(get("/connections/" + id + "/edit").with(user("admin")))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("name=\"password\"")))
         .andExpect(content().string(containsString("leave blank to keep the current password")))
@@ -166,7 +166,7 @@ class ConnectionControllerTest extends PostgresTestBase {
         .andExpect(content().string(containsString("action=\"/connections/" + id + "\"")));
     // the password input carries no value at all
     String html =
-        mvc.perform(get("/connections/" + id + "/edit").with(user("admin")))
+        mockMvc.perform(get("/connections/" + id + "/edit").with(user("admin")))
             .andReturn()
             .getResponse()
             .getContentAsString();
@@ -179,7 +179,7 @@ class ConnectionControllerTest extends PostgresTestBase {
   void updateKeepsPasswordWhenBlank() throws Exception {
     long id = connections.save(valid("Prod")).id();
     String before = repo.findById(id).orElseThrow().passwordEncrypted();
-    mvc.perform(validPost("/connections/" + id, "Renamed", "channel", "OTHER"))
+    mockMvc.perform(validPost("/connections/" + id, "Renamed", "channel", "OTHER"))
         .andExpect(status().is3xxRedirection());
     var after = repo.findById(id).orElseThrow();
     assertThat(after.name()).isEqualTo("Renamed");
@@ -192,7 +192,7 @@ class ConnectionControllerTest extends PostgresTestBase {
     when(gateway.inquireQueueManager())
         .thenReturn(new QueueManagerInfo("QM1", "RUNNING", 940, "UNIX"));
     when(factory.open(any())).thenReturn(gateway);
-    mvc.perform(validPost("/connections/test", "Prod"))
+    mockMvc.perform(validPost("/connections/test", "Prod"))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("QM1")));
     assertThat(repo.count()).isZero();
@@ -201,7 +201,7 @@ class ConnectionControllerTest extends PostgresTestBase {
   @Test
   void testEndpointShowsFailure() throws Exception {
     when(factory.open(any())).thenThrow(new MqUnreachableException("MQRC 2538 host not found", null));
-    mvc.perform(validPost("/connections/test", "Prod"))
+    mockMvc.perform(validPost("/connections/test", "Prod"))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("2538")));
     assertThat(repo.count()).isZero();
@@ -209,7 +209,7 @@ class ConnectionControllerTest extends PostgresTestBase {
 
   @Test
   void testEndpointWithInvalidFormShowsErrors() throws Exception {
-    mvc.perform(validPost("/connections/test", "Prod", "tlsMode", "TLS", "host", ""))
+    mockMvc.perform(validPost("/connections/test", "Prod", "tlsMode", "TLS", "host", ""))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("Cipher spec is required for TLS")));
     verify(factory, org.mockito.Mockito.never()).open(any());
@@ -218,22 +218,22 @@ class ConnectionControllerTest extends PostgresTestBase {
 
   @Test
   void tlsFieldsFragmentShowsKeystoreForMutualTls() throws Exception {
-    mvc.perform(get("/connections/tls-fields").param("tlsMode", "MUTUAL_TLS").with(user("admin")))
+    mockMvc.perform(get("/connections/tls-fields").param("tlsMode", "MUTUAL_TLS").with(user("admin")))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("name=\"cipherSpec\"")))
         .andExpect(content().string(containsString("name=\"truststorePath\"")))
         .andExpect(content().string(containsString("name=\"keystorePath\"")))
         .andExpect(content().string(containsString("name=\"certificateLabel\"")));
-    mvc.perform(get("/connections/tls-fields").param("tlsMode", "TLS").with(user("admin")))
+    mockMvc.perform(get("/connections/tls-fields").param("tlsMode", "TLS").with(user("admin")))
         .andExpect(content().string(containsString("name=\"truststorePath\"")))
         .andExpect(content().string(not(containsString("name=\"keystorePath\""))));
-    mvc.perform(get("/connections/tls-fields").param("tlsMode", "NONE").with(user("admin")))
+    mockMvc.perform(get("/connections/tls-fields").param("tlsMode", "NONE").with(user("admin")))
         .andExpect(content().string(not(containsString("name=\"cipherSpec\""))));
   }
 
   @Test
   void tlsFieldsFragmentKeepsTypedValues() throws Exception {
-    mvc.perform(
+    mockMvc.perform(
             get("/connections/tls-fields")
                 .param("tlsMode", "MUTUAL_TLS")
                 .param("cipherSpec", "TLS_AES_128_GCM_SHA256")
@@ -248,7 +248,7 @@ class ConnectionControllerTest extends PostgresTestBase {
   @Test
   void deleteRemovesRow() throws Exception {
     long id = connections.save(valid("Prod")).id();
-    mvc.perform(post("/connections/" + id + "/delete").with(user("admin")).with(csrf()))
+    mockMvc.perform(post("/connections/" + id + "/delete").with(user("admin")).with(csrf()))
         .andExpect(status().is3xxRedirection())
         .andExpect(redirectedUrl("/connections"));
     assertThat(repo.count()).isZero();
@@ -258,7 +258,7 @@ class ConnectionControllerTest extends PostgresTestBase {
   @Test
   void deleteViaHtmxReturnsEmptyBody() throws Exception {
     long id = connections.save(valid("Prod")).id();
-    mvc.perform(
+    mockMvc.perform(
             post("/connections/" + id + "/delete")
                 .header("HX-Request", "true")
                 .with(user("admin"))
@@ -279,7 +279,7 @@ class ConnectionControllerTest extends PostgresTestBase {
             Map.of(),
             Map.of());
     when(registry.latest(id)).thenReturn(Optional.of(unhealthy));
-    mvc.perform(get("/connections").with(user("admin")))
+    mockMvc.perform(get("/connections").with(user("admin")))
         .andExpect(status().isOk())
         .andExpect(content().string(containsString("health-unhealthy")))
         .andExpect(content().string(containsString("sse-connect=\"/connections/stream\"")))

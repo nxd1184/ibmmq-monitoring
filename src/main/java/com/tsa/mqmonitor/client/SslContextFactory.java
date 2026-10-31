@@ -106,11 +106,11 @@ public final class SslContextFactory {
 
   /** Always presents the configured client certificate. */
   private static final class AliasKeyManager extends X509ExtendedKeyManager {
-    private final X509KeyManager delegate;
+    private final X509KeyManager x509KeyManager;
     private final String alias;
 
-    AliasKeyManager(X509KeyManager delegate, String alias) {
-      this.delegate = delegate;
+    AliasKeyManager(X509KeyManager x509KeyManager, String alias) {
+      this.x509KeyManager = x509KeyManager;
       this.alias = alias;
     }
 
@@ -126,27 +126,27 @@ public final class SslContextFactory {
 
     @Override
     public String[] getClientAliases(String keyType, Principal[] issuers) {
-      return delegate.getClientAliases(keyType, issuers);
+      return x509KeyManager.getClientAliases(keyType, issuers);
     }
 
     @Override
     public String[] getServerAliases(String keyType, Principal[] issuers) {
-      return delegate.getServerAliases(keyType, issuers);
+      return x509KeyManager.getServerAliases(keyType, issuers);
     }
 
     @Override
     public String chooseServerAlias(String keyType, Principal[] issuers, Socket socket) {
-      return delegate.chooseServerAlias(keyType, issuers, socket);
+      return x509KeyManager.chooseServerAlias(keyType, issuers, socket);
     }
 
     @Override
     public X509Certificate[] getCertificateChain(String alias) {
-      return delegate.getCertificateChain(alias);
+      return x509KeyManager.getCertificateChain(alias);
     }
 
     @Override
     public PrivateKey getPrivateKey(String alias) {
-      return delegate.getPrivateKey(alias);
+      return x509KeyManager.getPrivateKey(alias);
     }
   }
 }

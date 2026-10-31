@@ -31,47 +31,47 @@ import org.springframework.util.StringUtils;
 public class ConnectionService {
   private static final Logger log = LoggerFactory.getLogger(ConnectionService.class);
 
-  private final MqConnectionRepository repo;
-  private final SecretCipher cipher;
-  private final MqMonitorProperties props;
-  private final MqGatewayFactory gatewayFactory;
-  private final ObjectProvider<SamplerRegistry> registry;
+  private final MqConnectionRepository mqConnectionRepository;
+  private final SecretCipher secretCipher;
+  private final MqMonitorProperties mqMonitorProperties;
+  private final MqGatewayFactory mqGatewayFactory;
+  private final ObjectProvider<SamplerRegistry> samplerRegistry;
 
   public ConnectionService(
-      MqConnectionRepository repo,
-      SecretCipher cipher,
-      MqMonitorProperties props,
-      MqGatewayFactory gatewayFactory,
-      ObjectProvider<SamplerRegistry> registry) {
-    this.repo = repo;
-    this.cipher = cipher;
-    this.props = props;
-    this.gatewayFactory = gatewayFactory;
-    this.registry = registry;
+      MqConnectionRepository mqConnectionRepository,
+      SecretCipher secretCipher,
+      MqMonitorProperties mqMonitorProperties,
+      MqGatewayFactory mqGatewayFactory,
+      ObjectProvider<SamplerRegistry> samplerRegistry) {
+    this.mqConnectionRepository = mqConnectionRepository;
+    this.secretCipher = secretCipher;
+    this.mqMonitorProperties = mqMonitorProperties;
+    this.mqGatewayFactory = mqGatewayFactory;
+    this.samplerRegistry = samplerRegistry;
   }
 
   public List<MqConnection> findAll() {
-    return repo.findAll();
+    return mqConnectionRepository.findAll();
   }
 
   public Optional<MqConnection> findById(long id) {
-    return repo.findById(id);
+    return mqConnectionRepository.findById(id);
   }
 
   public List<MqConnection> findPrometheusExports() {
-    return repo.findByPrometheusExportTrue();
+    return mqConnectionRepository.findByPrometheusExportTrue();
   }
 
   public void delete(long id) {
-    repo.deleteById(id);
-    registry.ifAvailable(r -> r.connectionDeleted(id));
+    mqConnectionRepository.deleteById(id);
+    samplerRegistry.ifAvailable(r -> r.connectionDeleted(id));
   }
 
   public MqConnection save(ConnectionForm form) {
     Optional<MqConnection> existing = existingFor(form);
     String passwordEncrypted =
         StringUtils.hasText(form.getPassword())
-            ? cipher.encrypt(form.getPassword())
+            ? secretCipher.encrypt(form.getPassword())
             : existing.map(MqConnection::passwordEncrypted).orElse(null);
     Instant now = Instant.now();
     Instant createdAt = existing.map(MqConnection::createdAt).orElse(now);
@@ -104,14 +104,14 @@ public class ConnectionService {
             now);
     MqConnection saved;
     try {
-      saved = repo.save(entity);
+      saved = mqConnectionRepository.save(entity);
     } catch (DbActionExecutionException e) {
       if (e.getCause() instanceof DataAccessException dae) {
         throw dae;
       }
       throw e;
     }
-    registry.ifAvailable(r -> r.connectionChanged(saved.id()));
+    samplerRegistry.ifAvailable(r -> r.connectionChanged(saved.id()));
     return saved;
   }
 
@@ -148,11 +148,11 @@ public class ConnectionService {
   }
 
   public String plainPassword(MqConnection c) {
-    return cipher.decrypt(c.passwordEncrypted());
+    return secretCipher.decrypt(c.passwordEncrypted());
   }
 
   public Thresholds thresholdsFor(MqConnection c) {
-    var t = props.thresholds();
+    var t = mqMonitorProperties.thresholds();
     return new Thresholds(
             t.depthMax(), t.depthPercent(), t.noConsumerSeconds(), t.oldestMessageAgeSeconds())
         .withOverrides(
@@ -205,7 +205,7 @@ public class ConnectionService {
   public ConnectionTestResult test(ConnectionForm form) {
     MqGateway gateway = null;
     try {
-      gateway = gatewayFactory.open(targetFor(form));
+      gateway = mqGatewayFactory.open(targetFor(form));
       gateway.beginSample();
       var qmgr = gateway.inquireQueueManager();
       return new ConnectionTestResult(true, "Connected to " + qmgr.name(), qmgr);
@@ -225,7 +225,7 @@ public class ConnectionService {
   }
 
   private Optional<MqConnection> existingFor(ConnectionForm form) {
-    return form.getId() == null ? Optional.empty() : repo.findById(form.getId());
+    return form.getId() == null ? Optional.empty() : mqConnectionRepository.findById(form.getId());
   }
 
   private MqTarget target(
@@ -248,7 +248,7 @@ public class ConnectionService {
         clientType,
         tls,
         replyQueueModel,
-        Duration.ofSeconds(props.mq().connectTimeoutSeconds()));
+        Duration.ofSeconds(mqMonitorProperties.mq().connectTimeoutSeconds()));
   }
 
   private TlsSettings tlsFor(
@@ -256,7 +256,7 @@ public class ConnectionService {
     if (mode == null || mode == TlsMode.NONE) {
       return TlsSettings.none();
     }
-    var d = props.tls();
+    var d = mqMonitorProperties.tls();
     return new TlsSettings(
         mode,
         cipherSpec,

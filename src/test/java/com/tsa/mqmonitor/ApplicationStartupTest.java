@@ -11,20 +11,20 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class ApplicationStartupTest extends PostgresTestBase {
 
     @Autowired
-    MqMonitorProperties props;
+    MqMonitorProperties mqMonitorProperties;
 
     @Test
     void contextLoadsAndFlywayRan(@Autowired JdbcTemplate jdbc) {
         assertThat(jdbc.queryForObject("select count(*) from mq_connection", Integer.class)).isZero();
-        assertThat(props.admin().username()).isEqualTo("admin");
+        assertThat(mqMonitorProperties.admin().username()).isEqualTo("admin");
     }
 
     @Test
     void documentedDefaultsApply() {
-        assertThat(props.sampling().watcherGraceSeconds()).isEqualTo(30);
-        assertThat(props.sampling().listIntervalSeconds()).isEqualTo(30);
-        assertThat(props.thresholds().depthPercent()).isEqualTo(80);
-        assertThat(props.thresholds().noConsumerSeconds()).isEqualTo(60);
-        assertThat(props.mq().connectTimeoutSeconds()).isEqualTo(10);
+        assertThat(mqMonitorProperties.sampling().watcherGraceSeconds()).isEqualTo(30);
+        assertThat(mqMonitorProperties.sampling().listIntervalSeconds()).isEqualTo(30);
+        assertThat(mqMonitorProperties.thresholds().depthPercent()).isEqualTo(80);
+        assertThat(mqMonitorProperties.thresholds().noConsumerSeconds()).isEqualTo(60);
+        assertThat(mqMonitorProperties.mq().connectTimeoutSeconds()).isEqualTo(10);
     }
 }

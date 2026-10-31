@@ -20,8 +20,8 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 
 class PcfMqGatewayTest {
-  FakeTransport t = new FakeTransport();
-  PcfMqGateway gw = new PcfMqGateway(t);
+  FakeTransport fakeTransport = new FakeTransport();
+  PcfMqGateway pcfMqGateway = new PcfMqGateway(fakeTransport);
 
   static PCFMessage resp(int command) {
     return new PCFMessage(CMQCFC.MQCFT_RESPONSE, command, 1, true);
@@ -68,15 +68,15 @@ class PcfMqGatewayTest {
 
   @Test
   void inquireQueuesRequestsLocalQueuesWithFilterAndStatus() throws Exception {
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 5, 5000), qResp("SYSTEM.ADMIN.X", 0, 100));
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS, qStatusResp("APP.IN", 2, 1, 42));
-    var qs = gw.inquireQueues("APP.*", true);
-    assertThat(t.requests.get(0).getStringParameterValue(CMQC.MQCA_Q_NAME).trim()).isEqualTo("APP.*");
-    assertThat(t.requests.get(0).getIntParameterValue(CMQC.MQIA_Q_TYPE)).isEqualTo(CMQC.MQQT_LOCAL);
-    assertThat(t.requests.get(0).getIntListParameterValue(CMQCFC.MQIACF_Q_ATTRS))
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 5, 5000), qResp("SYSTEM.ADMIN.X", 0, 100));
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS, qStatusResp("APP.IN", 2, 1, 42));
+    var qs = pcfMqGateway.inquireQueues("APP.*", true);
+    assertThat(fakeTransport.requests.get(0).getStringParameterValue(CMQC.MQCA_Q_NAME).trim()).isEqualTo("APP.*");
+    assertThat(fakeTransport.requests.get(0).getIntParameterValue(CMQC.MQIA_Q_TYPE)).isEqualTo(CMQC.MQQT_LOCAL);
+    assertThat(fakeTransport.requests.get(0).getIntListParameterValue(CMQCFC.MQIACF_Q_ATTRS))
         .containsExactly(CMQC.MQCA_Q_NAME, CMQC.MQIA_CURRENT_Q_DEPTH, CMQC.MQIA_MAX_Q_DEPTH);
-    assertThat(t.requests.get(1).getCommand()).isEqualTo(CMQCFC.MQCMD_INQUIRE_Q_STATUS);
-    assertThat(t.requests.get(1).getIntListParameterValue(CMQCFC.MQIACF_Q_STATUS_ATTRS)).hasSize(8);
+    assertThat(fakeTransport.requests.get(1).getCommand()).isEqualTo(CMQCFC.MQCMD_INQUIRE_Q_STATUS);
+    assertThat(fakeTransport.requests.get(1).getIntListParameterValue(CMQCFC.MQIACF_Q_STATUS_ATTRS)).hasSize(8);
     assertThat(qs).extracting(QueueInfo::name).containsExactly("APP.IN");
     assertThat(qs.get(0))
         .satisfies(
@@ -91,28 +91,28 @@ class PcfMqGatewayTest {
 
   @Test
   void systemQueuesShownWhenNotHidden() {
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("SYSTEM.ADMIN.X", 0, 100));
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS);
-    assertThat(gw.inquireQueues("*", false)).hasSize(1);
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("SYSTEM.ADMIN.X", 0, 100));
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS);
+    assertThat(pcfMqGateway.inquireQueues("*", false)).hasSize(1);
   }
 
   @Test
   void amqDynamicQueuesAlwaysDropped() {
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("AMQ.5F1.ABC", 0, 100), qResp("APP.IN", 0, 100));
-    assertThat(gw.inquireQueues("*", false)).extracting(QueueInfo::name).containsExactly("APP.IN");
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("AMQ.5F1.ABC", 0, 100), qResp("APP.IN", 0, 100));
+    assertThat(pcfMqGateway.inquireQueues("*", false)).extracting(QueueInfo::name).containsExactly("APP.IN");
   }
 
   @Test
   void monqOffYieldsNullAge() {
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 0, 100));
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS, qStatusResp("APP.IN", 0, 0, -1));
-    assertThat(gw.inquireQueues("*", true).get(0).oldestMessageAgeSeconds()).isNull();
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 0, 100));
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS, qStatusResp("APP.IN", 0, 0, -1));
+    assertThat(pcfMqGateway.inquireQueues("*", true).get(0).oldestMessageAgeSeconds()).isNull();
   }
 
   @Test
   void missingStatusYieldsNullStatusFields() {
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 3, 100));
-    var q = gw.inquireQueues("*", true).get(0);
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 3, 100));
+    var q = pcfMqGateway.inquireQueues("*", true).get(0);
     assertThat(q.openInputCount()).isNull();
     assertThat(q.openOutputCount()).isNull();
     assertThat(q.oldestMessageAgeSeconds()).isNull();
@@ -122,64 +122,64 @@ class PcfMqGatewayTest {
 
   @Test
   void parsesLastPutAndGet() {
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 1, 100));
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 1, 100));
     var s = qStatusResp("APP.IN", 0, 0, 5);
     s.addParameter(CMQCFC.MQCACF_LAST_PUT_DATE, "2026-10-30");
     s.addParameter(CMQCFC.MQCACF_LAST_PUT_TIME, "13.45.07");
     s.addParameter(CMQCFC.MQCACF_LAST_GET_DATE, "2026-10-29");
     s.addParameter(CMQCFC.MQCACF_LAST_GET_TIME, "01.02.03");
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS, s);
-    var q = gw.inquireQueues("*", true).get(0);
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS, s);
+    var q = pcfMqGateway.inquireQueues("*", true).get(0);
     assertThat(q.lastPut()).isEqualTo(LocalDateTime.of(2026, 10, 30, 13, 45, 7));
     assertThat(q.lastGet()).isEqualTo(LocalDateTime.of(2026, 10, 29, 1, 2, 3));
   }
 
   @Test
   void blankLastPutIsNull() {
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 1, 100));
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 1, 100));
     var s = qStatusResp("APP.IN", 0, 0, 5);
     s.addParameter(CMQCFC.MQCACF_LAST_PUT_DATE, "        ");
     s.addParameter(CMQCFC.MQCACF_LAST_PUT_TIME, "        ");
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS, s);
-    assertThat(gw.inquireQueues("*", true).get(0).lastPut()).isNull();
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS, s);
+    assertThat(pcfMqGateway.inquireQueues("*", true).get(0).lastPut()).isNull();
   }
 
   @Test
   void unknownQueueStatusNameIsNoStatus() throws Exception {
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 1, 100));
-    t.fail(CMQCFC.MQCMD_INQUIRE_Q_STATUS, new PCFException(2, CMQC.MQRC_UNKNOWN_OBJECT_NAME, null));
-    assertThat(gw.inquireQueues("*", true)).hasSize(1);
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 1, 100));
+    fakeTransport.fail(CMQCFC.MQCMD_INQUIRE_Q_STATUS, new PCFException(2, CMQC.MQRC_UNKNOWN_OBJECT_NAME, null));
+    assertThat(pcfMqGateway.inquireQueues("*", true)).hasSize(1);
   }
 
   @Test
   void statusErrorResponseMessageIsTranslated() {
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 1, 100));
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 1, 100));
     var bad = resp(CMQCFC.MQCMD_INQUIRE_Q_STATUS);
     bad.getHeader().setCompCode(2);
     bad.getHeader().setReason(CMQC.MQRC_NOT_AUTHORIZED);
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS, bad);
-    assertThatThrownBy(() -> gw.inquireQueues("*", true)).isInstanceOf(MqAuthorityException.class);
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q_STATUS, bad);
+    assertThatThrownBy(() -> pcfMqGateway.inquireQueues("*", true)).isInstanceOf(MqAuthorityException.class);
   }
 
   @Test
   void messageWithoutNameIsSkipped() {
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 1, 100), resp(CMQCFC.MQCMD_INQUIRE_Q));
-    assertThat(gw.inquireQueues("*", true)).hasSize(1);
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q, qResp("APP.IN", 1, 100), resp(CMQCFC.MQCMD_INQUIRE_Q));
+    assertThat(pcfMqGateway.inquireQueues("*", true)).hasSize(1);
   }
 
   @Test
   void channelsMapTypeAndStatus() throws Exception {
-    t.respond(CMQCFC.MQCMD_INQUIRE_CHANNEL_STATUS, chlStatusResp("TO.QM2", CMQXC.MQCHT_SENDER, CMQCFC.MQCHS_RUNNING));
-    assertThat(gw.inquireChannels()).containsExactly(new ChannelInfo("TO.QM2", "SENDER", "RUNNING"));
-    var req = t.requests.get(0);
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_CHANNEL_STATUS, chlStatusResp("TO.QM2", CMQXC.MQCHT_SENDER, CMQCFC.MQCHS_RUNNING));
+    assertThat(pcfMqGateway.inquireChannels()).containsExactly(new ChannelInfo("TO.QM2", "SENDER", "RUNNING"));
+    var req = fakeTransport.requests.get(0);
     assertThat(req.getStringParameterValue(CMQCFC.MQCACH_CHANNEL_NAME).trim()).isEqualTo("*");
     assertThat(req.getIntParameterValue(CMQCFC.MQIACH_CHANNEL_INSTANCE_TYPE)).isEqualTo(CMQC.MQOT_CURRENT_CHANNEL);
   }
 
   @Test
   void noChannelStatusIsEmptyList() {
-    t.fail(CMQCFC.MQCMD_INQUIRE_CHANNEL_STATUS, new PCFException(2, CMQCFC.MQRCCF_CHL_STATUS_NOT_FOUND, null));
-    assertThat(gw.inquireChannels()).isEmpty();
+    fakeTransport.fail(CMQCFC.MQCMD_INQUIRE_CHANNEL_STATUS, new PCFException(2, CMQCFC.MQRCCF_CHL_STATUS_NOT_FOUND, null));
+    assertThat(pcfMqGateway.inquireChannels()).isEmpty();
   }
 
   @Test
@@ -187,58 +187,58 @@ class PcfMqGatewayTest {
     var m = resp(CMQCFC.MQCMD_INQUIRE_CHANNEL_STATUS);
     m.getHeader().setCompCode(2);
     m.getHeader().setReason(CMQCFC.MQRCCF_CHL_STATUS_NOT_FOUND);
-    t.respond(CMQCFC.MQCMD_INQUIRE_CHANNEL_STATUS, m);
-    assertThat(gw.inquireChannels()).isEmpty();
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_CHANNEL_STATUS, m);
+    assertThat(pcfMqGateway.inquireChannels()).isEmpty();
   }
 
   @Test
   void notAuthorizedBecomesAuthorityException() {
-    t.fail(CMQCFC.MQCMD_INQUIRE_Q, new PCFException(2, CMQC.MQRC_NOT_AUTHORIZED, null));
-    assertThatThrownBy(() -> gw.inquireQueues("*", true))
+    fakeTransport.fail(CMQCFC.MQCMD_INQUIRE_Q, new PCFException(2, CMQC.MQRC_NOT_AUTHORIZED, null));
+    assertThatThrownBy(() -> pcfMqGateway.inquireQueues("*", true))
         .isInstanceOf(MqAuthorityException.class)
         .hasMessageContaining("2035");
   }
 
   @Test
   void plainMqExceptionIsTranslatedToo() {
-    t.fail(CMQCFC.MQCMD_INQUIRE_Q, new MQException(2, CMQC.MQRC_Q_MGR_NOT_AVAILABLE, null));
-    assertThatThrownBy(() -> gw.inquireQueues("*", true)).isInstanceOf(MqUnreachableException.class);
+    fakeTransport.fail(CMQCFC.MQCMD_INQUIRE_Q, new MQException(2, CMQC.MQRC_Q_MGR_NOT_AVAILABLE, null));
+    assertThatThrownBy(() -> pcfMqGateway.inquireQueues("*", true)).isInstanceOf(MqUnreachableException.class);
   }
 
   @Test
   void ioExceptionBecomesUnreachable() {
-    t.fail(CMQCFC.MQCMD_INQUIRE_Q, new IOException("boom"));
-    assertThatThrownBy(() -> gw.inquireQueues("*", true)).isInstanceOf(MqUnreachableException.class);
+    fakeTransport.fail(CMQCFC.MQCMD_INQUIRE_Q, new IOException("boom"));
+    assertThatThrownBy(() -> pcfMqGateway.inquireQueues("*", true)).isInstanceOf(MqUnreachableException.class);
   }
 
   @Test
   void filterMatchingNoQueueIsEmptyList() {
-    t.fail(CMQCFC.MQCMD_INQUIRE_Q, new PCFException(2, CMQC.MQRC_UNKNOWN_OBJECT_NAME, null));
-    t.fail(CMQCFC.MQCMD_INQUIRE_Q_STATUS, new PCFException(2, CMQC.MQRC_UNKNOWN_OBJECT_NAME, null));
-    assertThat(gw.inquireQueues("NOMATCH.*", true)).isEmpty();
+    fakeTransport.fail(CMQCFC.MQCMD_INQUIRE_Q, new PCFException(2, CMQC.MQRC_UNKNOWN_OBJECT_NAME, null));
+    fakeTransport.fail(CMQCFC.MQCMD_INQUIRE_Q_STATUS, new PCFException(2, CMQC.MQRC_UNKNOWN_OBJECT_NAME, null));
+    assertThat(pcfMqGateway.inquireQueues("NOMATCH.*", true)).isEmpty();
   }
 
   @Test
   void otherReasonBecomesGatewayException() {
-    t.fail(CMQCFC.MQCMD_INQUIRE_Q, new PCFException(2, CMQC.MQRC_NO_MSG_AVAILABLE, null));
-    assertThatThrownBy(() -> gw.inquireQueues("*", true))
+    fakeTransport.fail(CMQCFC.MQCMD_INQUIRE_Q, new PCFException(2, CMQC.MQRC_NO_MSG_AVAILABLE, null));
+    assertThatThrownBy(() -> pcfMqGateway.inquireQueues("*", true))
         .isExactlyInstanceOf(MqGatewayException.class);
   }
 
   @Test
   void qmgrStatusMapsToName() {
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q_MGR_STATUS, qmgrStatusResp("QM1", CMQCFC.MQQMSTA_RUNNING));
-    t.respond(CMQCFC.MQCMD_INQUIRE_Q_MGR, qmgrResp(940, CMQC.MQPL_UNIX));
-    var info = gw.inquireQueueManager();
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q_MGR_STATUS, qmgrStatusResp("QM1", CMQCFC.MQQMSTA_RUNNING));
+    fakeTransport.respond(CMQCFC.MQCMD_INQUIRE_Q_MGR, qmgrResp(940, CMQC.MQPL_UNIX));
+    var info = pcfMqGateway.inquireQueueManager();
     assertThat(info).isEqualTo(new QueueManagerInfo("QM1", "RUNNING", 940, "UNIX"));
-    assertThat(t.requests).extracting(PCFMessage::getCommand)
+    assertThat(fakeTransport.requests).extracting(PCFMessage::getCommand)
         .containsExactly(CMQCFC.MQCMD_INQUIRE_Q_MGR_STATUS, CMQCFC.MQCMD_INQUIRE_Q_MGR);
   }
 
   @Test
   void closeClosesTransport() {
-    gw.close();
-    assertThat(t.closed).isTrue();
+    pcfMqGateway.close();
+    assertThat(fakeTransport.closed).isTrue();
   }
 
   /** Answers every request with an empty OK reply after {@code delayMs}. */

@@ -24,7 +24,7 @@ import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 class SampleFragmentRendererTest {
   private static final Instant AT = Instant.parse("2026-10-30T10:15:30.123Z");
 
-  private final SampleFragmentRenderer renderer = new SampleFragmentRenderer(engine());
+  private final SampleFragmentRenderer sampleFragmentRenderer = new SampleFragmentRenderer(engine());
 
   static SpringTemplateEngine engine() {
     var resolver = new ClassLoaderTemplateResolver();
@@ -60,7 +60,7 @@ class SampleFragmentRendererTest {
   @Test
   void nullAgeRendersNa() {
     var html =
-        renderer.render(
+        sampleFragmentRenderer.render(
             "queues",
             sample(List.of(queue("DEV.Q1", 3, null)), Map.of("DEV.Q1", HealthVerdict.healthy())),
             false);
@@ -71,7 +71,7 @@ class SampleFragmentRendererTest {
   void unhealthyQueueHasClassAndReason() {
     var verdict = HealthVerdict.unhealthy(HealthReason.DEPTH_PERCENT, "depth 80 is 80% of max 100");
     var html =
-        renderer.render("queues", sample(List.of(queue("DEV.Q1", 80, 42)), Map.of("DEV.Q1", verdict)), false);
+        sampleFragmentRenderer.render("queues", sample(List.of(queue("DEV.Q1", 80, 42)), Map.of("DEV.Q1", verdict)), false);
     assertThat(html)
         .contains("class=\"health-unhealthy\"")
         .contains("title=\"depth 80 is 80% of max 100\"")
@@ -85,8 +85,8 @@ class SampleFragmentRendererTest {
         sample(
             List.of(queue("DEV.Q1", 1, 1), queue("SYSTEM.X", 2, 2)),
             Map.of("DEV.Q1", HealthVerdict.healthy(), "SYSTEM.X", HealthVerdict.healthy()));
-    assertThat(renderer.render("queues", s, false)).contains("DEV.Q1").doesNotContain("SYSTEM.X");
-    assertThat(renderer.render("queues", s, true)).contains("DEV.Q1").contains("SYSTEM.X");
+    assertThat(sampleFragmentRenderer.render("queues", s, false)).contains("DEV.Q1").doesNotContain("SYSTEM.X");
+    assertThat(sampleFragmentRenderer.render("queues", s, true)).contains("DEV.Q1").contains("SYSTEM.X");
   }
 
   @Test
@@ -97,13 +97,13 @@ class SampleFragmentRendererTest {
             HealthVerdict.unhealthy(HealthReason.UNREACHABLE, "authority missing on DEV.* (MQRC 2035)"),
             Map.of(),
             Map.of());
-    var html = renderer.render("qmgr", failed, false);
+    var html = sampleFragmentRenderer.render("qmgr", failed, false);
     assertThat(html).contains("authority missing on DEV.*").contains("class=\"health-unhealthy\"");
   }
 
   @Test
   void qmgrShowsDetailsAndUtcSampleTime() {
-    var html = renderer.render("qmgr", sample(List.of(), Map.of()), false);
+    var html = sampleFragmentRenderer.render("qmgr", sample(List.of(), Map.of()), false);
     assertThat(html)
         .contains("QM1")
         .contains("RUNNING")
@@ -116,14 +116,14 @@ class SampleFragmentRendererTest {
 
   @Test
   void channelsTableShowsChannel() {
-    var html = renderer.render("channels", sample(List.of(), Map.of()), false);
+    var html = sampleFragmentRenderer.render("channels", sample(List.of(), Map.of()), false);
     assertThat(html).contains("DEV.APP.SVRCONN").contains("SVRCONN").contains("health-healthy");
   }
 
   @Test
   void rowShowsWaitingWithoutSampleAndLinksToDashboard() {
     var c = connection(7L);
-    var html = renderer.renderRow(c, null);
+    var html = sampleFragmentRenderer.renderRow(c, null);
     assertThat(html)
         .contains("id=\"conn-7\"")
         .contains("mq.example:1414")
@@ -139,7 +139,7 @@ class SampleFragmentRendererTest {
             HealthVerdict.unhealthy(HealthReason.UNREACHABLE, "host down"),
             Map.of(),
             Map.of());
-    var html = renderer.renderRow(connection(7L), failed);
+    var html = sampleFragmentRenderer.renderRow(connection(7L), failed);
     assertThat(html).contains("unreachable").contains("title=\"host down\"");
   }
 
@@ -151,13 +151,13 @@ class SampleFragmentRendererTest {
             HealthVerdict.healthy(),
             Map.of(),
             Map.of());
-    var html = renderer.render("qmgr", s, false, true);
+    var html = sampleFragmentRenderer.render("qmgr", s, false, true);
     assertThat(html)
         .contains("Stale · last sample")
         .contains("live-stale")
         .contains("2026-10-30T10:15:30Z")
         .doesNotContain("live-word");
-    assertThat(renderer.render("qmgr", s, false)).contains("live-word").doesNotContain("Stale");
+    assertThat(sampleFragmentRenderer.render("qmgr", s, false)).contains("live-word").doesNotContain("Stale");
   }
 
   static MqConnection connection(long id) {
