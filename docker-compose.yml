@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: mqmonitor
       POSTGRES_PASSWORD: mqmonitor
     # Host port 5433 (container 5432) so it does not clash with a local PostgreSQL on 5432.
-    # Run the app with SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/mqmonitor
+    # application.yml defaults to jdbc:postgresql://localhost:5433/mqmonitor, so a local run needs no override.
     ports:
       - "5433:5432"
     healthcheck:

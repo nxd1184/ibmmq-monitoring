@@ -1,6 +1,12 @@
 spring:
   application:
     name: ibmmq-monitoring-tool
+  # Defaults match the Postgres in docker-compose.yml (host port 5433). Override with
+  # SPRING_DATASOURCE_URL / _USERNAME / _PASSWORD in any other environment.
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/mqmonitor}
+    username: ${SPRING_DATASOURCE_USERNAME:mqmonitor}
+    password: ${SPRING_DATASOURCE_PASSWORD:mqmonitor}
   flyway:
     enabled: true
 

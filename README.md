@@ -53,7 +53,7 @@ You need Docker.
 6. Select Test, then save, then open the dashboard.
 
 Compose publishes PostgreSQL on host port 5433, so it does not clash with a local PostgreSQL on 5432.
-To run the app outside Docker, set `SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/mqmonitor`.
+Outside Docker the app already defaults to `jdbc:postgresql://localhost:5433/mqmonitor` with user and password `mqmonitor`, matching the compose Postgres; override with `SPRING_DATASOURCE_URL` and friends for any other database.
 
 ## Configuration
 
@@ -64,9 +64,9 @@ The app refuses to start without the admin username, the admin password and the 
 | `MQMONITOR_ADMIN_USERNAME` | `mqmonitor.admin.username` | none, required | Login user name. |
 | `MQMONITOR_ADMIN_PASSWORD` | `mqmonitor.admin.password` | none, required | Login password. |
 | `MQMONITOR_ENCRYPTION_KEY` | `mqmonitor.encryption-key` | none, required | Base64 of 32 bytes. Encrypts stored connection passwords with AES-GCM. |
-| `SPRING_DATASOURCE_URL` | `spring.datasource.url` | none | JDBC URL of PostgreSQL. |
-| `SPRING_DATASOURCE_USERNAME` | `spring.datasource.username` | none | Database user. |
-| `SPRING_DATASOURCE_PASSWORD` | `spring.datasource.password` | none | Database password. |
+| `SPRING_DATASOURCE_URL` | `spring.datasource.url` | `jdbc:postgresql://localhost:5433/mqmonitor` | JDBC URL of PostgreSQL. |
+| `SPRING_DATASOURCE_USERNAME` | `spring.datasource.username` | `mqmonitor` | Database user. |
+| `SPRING_DATASOURCE_PASSWORD` | `spring.datasource.password` | `mqmonitor` | Database password. |
 | `MQMONITOR_TLS_TRUSTSTORE_PATH` | `mqmonitor.tls.truststore-path` | none | Default PKCS12 truststore. |
 | `MQMONITOR_TLS_TRUSTSTORE_PASSWORD` | `mqmonitor.tls.truststore-password` | none | Password of that truststore. |
 | `MQMONITOR_TLS_KEYSTORE_PATH` | `mqmonitor.tls.keystore-path` | none | Default PKCS12 keystore, for mutual TLS. |
