@@ -1,3 +1,6 @@
+# Local test stack only: PostgreSQL and a demo IBM MQ queue manager.
+# The app itself runs from the IDE or `mvn spring-boot:run`; see README "Quick start".
+# Every value below is a demo value. Do not use them anywhere real.
 services:
   postgres:
     image: postgres:16-alpine
@@ -15,29 +18,20 @@ services:
       timeout: 3s
       retries: 10
 
-  # Local demo only. The values below are demo values. Do not use them anywhere real.
-  # The demo MQ queue manager is started separately:
-  #   docker run -d --name mq-demo --platform linux/amd64 -p 1414:1414 \
-  #     -e LICENSE=accept -e MQ_QMGR_NAME=QM1 \
-  #     -e MQ_ADMIN_PASSWORD=passw0rd -e MQ_APP_PASSWORD=passw0rd \
-  #     icr.io/ibm-messaging/mq:latest
-  # From inside this app container the MQ host is host.docker.internal (port 1414).
-  app:
-    build: .
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: on-failure
-    # Lets host.docker.internal resolve on Linux Docker too.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+  ibmmq:
+    image: icr.io/ibm-messaging/mq:latest
+    # The image has no arm64 build; this runs it under emulation on Apple Silicon.
+    platform: linux/amd64
     environment:
-      MQMONITOR_ADMIN_USERNAME: admin
-      MQMONITOR_ADMIN_PASSWORD: demo-admin-password
-      # Base64 of 32 bytes. Demo value.
-      MQMONITOR_ENCRYPTION_KEY: ZGVtby1rZXktZG8tbm90LXVzZS1pbi1wcm9kLTAwMDA=
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/mqmonitor
-      SPRING_DATASOURCE_USERNAME: mqmonitor
-      SPRING_DATASOURCE_PASSWORD: mqmonitor
+      LICENSE: accept
+      MQ_QMGR_NAME: QM1
+      MQ_ADMIN_PASSWORD: passw0rd
+      MQ_APP_PASSWORD: passw0rd
     ports:
-      - "8080:8080"
+      - "1414:1414"   # client channel DEV.ADMIN.SVRCONN
+      - "9443:9443"   # MQ Console, https://localhost:9443/ibmmq/console (admin / passw0rd)
+    healthcheck:
+      test: ["CMD", "dspmq", "-m", "QM1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12

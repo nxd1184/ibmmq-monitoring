@@ -18,31 +18,33 @@ Read-only is enforced by MQ authority too. See [MQ authorities](#mq-authorities)
 
 ## Quick start
 
-You need Docker.
+You need Docker for the test stack and a JDK 21 for the app.
 
-1. Start the demo queue manager. It runs under emulation on Apple Silicon.
-
-   ```sh
-   docker run -d --name mq-demo --platform linux/amd64 -p 1414:1414 \
-     -e LICENSE=accept -e MQ_QMGR_NAME=QM1 \
-     -e MQ_ADMIN_PASSWORD=passw0rd -e MQ_APP_PASSWORD=passw0rd \
-     icr.io/ibm-messaging/mq:latest
-   ```
-
-2. Start PostgreSQL and the app. The first run builds the image.
+1. Start PostgreSQL and the demo queue manager. The MQ image runs under emulation on Apple Silicon.
 
    ```sh
-   docker compose up -d --build
+   docker compose up -d
    ```
 
-3. Open `http://localhost:8080`.
-4. Log in with `admin` and `demo-admin-password`. These are demo values from `docker-compose.yml`.
-5. Create a connection with these values.
-   The MQ host is `host.docker.internal` because the app runs in a container.
+2. Run the app from your IDE (main class `com.tsa.mqmonitor.MqMonitorApplication`) or from Maven,
+   with the three required variables set. The database defaults already point at the compose
+   PostgreSQL on port 5433.
+
+   ```sh
+   MQMONITOR_ADMIN_USERNAME=admin \
+   MQMONITOR_ADMIN_PASSWORD=demo-admin-password \
+   MQMONITOR_ENCRYPTION_KEY=ZGVtby1rZXktZG8tbm90LXVzZS1pbi1wcm9kLTAwMDA= \
+   mvn spring-boot:run
+   ```
+
+   In an IDE, put the same three variables in the run configuration's environment.
+
+3. Open `http://localhost:8080` and log in with the admin username and password you set.
+4. Create a connection with these values.
 
    | Field | Value |
    |---|---|
-   | Host | `host.docker.internal` |
+   | Host | `localhost` |
    | Port | `1414` |
    | Queue Manager | `QM1` |
    | Channel | `DEV.ADMIN.SVRCONN` |
@@ -50,10 +52,13 @@ You need Docker.
    | Password | `passw0rd` |
    | TLS Mode | `NONE` |
 
-6. Select Test, then save, then open the dashboard.
+5. Select Test, then save, then open the dashboard.
 
-Compose publishes PostgreSQL on host port 5433, so it does not clash with a local PostgreSQL on 5432.
-Outside Docker the app already defaults to `jdbc:postgresql://localhost:5433/mqmonitor` with user and password `mqmonitor`, matching the compose Postgres; override with `SPRING_DATASOURCE_URL` and friends for any other database.
+The MQ Console of the demo queue manager is at `https://localhost:9443/ibmmq/console` (admin / passw0rd).
+`docker compose down -v` removes both containers and their data.
+
+To run the app itself in a container, build the image with `docker build -t ibmmq-monitoring-tool .`
+and pass the same variables plus `SPRING_DATASOURCE_URL`; see [Kubernetes](#kubernetes).
 
 ## Configuration
 
